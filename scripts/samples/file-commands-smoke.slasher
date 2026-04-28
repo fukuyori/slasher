@@ -1,0 +1,20 @@
+# File and folder command smoke.
+set root artifacts/tmp/file-command-smoke
+set source "${root}/source.txt"
+set copied "${root}/copied.txt"
+set renamed "${root}/renamed.txt"
+set subdir "${root}/subdir"
+set zipPath "${root}/subdir.zip"
+set unzipDir "${root}/unzipped"
+
+folder create "${root}"
+folder create "${subdir}"
+file copy "${source}" "${copied}" --overwrite
+file copy "${source}" "${subdir}/inside.txt" --overwrite
+file rename "${copied}" "${renamed}" --overwrite
+file info "${renamed}" as info
+assert value "${info.exists}" == True
+assert value "${info.isDirectory}" == False
+folder zip "${subdir}" "${zipPath}" --overwrite
+folder unzip "${zipPath}" "${unzipDir}" --overwrite
+folder delete "${unzipDir}" --recursive

@@ -1,0 +1,6 @@
+# Helper script for variable scope smoke tests.
+test step "scope helper"
+set file helperFileOnly helper-file
+set local helperLocalOnly helper-local
+set global sharedFromHelper helper-global
+assert value "${sharedFromMain}" == main-global

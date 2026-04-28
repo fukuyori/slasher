@@ -1,0 +1,37 @@
+{
+  "name": "slasher",
+  "version": "0.1.0",
+  "description": "Control local Windows apps through Slasher MCP tools.",
+  "author": {
+    "name": "OpenAI Codex + user",
+    "url": "https://openai.com/"
+  },
+  "license": "MIT",
+  "keywords": [
+    "windows",
+    "gui",
+    "automation",
+    "testing",
+    "desktop",
+    "mcp"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Slasher",
+    "shortDescription": "Drive Windows GUI apps from Codex",
+    "longDescription": "Expose Slasher GUI automation tools to Codex through a local MCP server so Codex can start apps, select windows, send input, and capture screenshots.",
+    "developerName": "OpenAI Codex + user",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Check Slasher status, then list visible windows",
+      "Validate a Slasher script before running it",
+      "Start Notepad, type text, and capture the selected window",
+      "Capture the foreground window and summarize what is visible"
+    ],
+    "brandColor": "#2F7EA8"
+  }
+}

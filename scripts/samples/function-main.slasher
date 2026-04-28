@@ -1,0 +1,17 @@
+# Demonstrates function blocks and per-call local variables.
+set global total 0
+
+function addItem name amount
+set local itemName "${name}"
+set local amountValue "${amount}"
+add global total "${amountValue}"
+log "added ${itemName}/${amountValue}/total=${total}"
+return "${total}"
+endfunction
+
+call addItem alpha 2 as firstTotal
+assert value "${firstTotal}" == 2
+assert variable not exists itemName
+call addItem beta 3 as finalTotal
+assert value "${finalTotal}" == 5
+assert value "${total}" == 5

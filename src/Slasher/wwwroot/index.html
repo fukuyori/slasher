@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slasher</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Slasher</h1>
+      <p>Observe, choose a target, act, and inspect the result.</p>
+    </div>
+    <div class="status">
+      <span id="health-dot" class="dot"></span>
+      <span id="health-text">checking</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel command-panel">
+      <div class="panel-title">
+        <h2>Command</h2>
+        <button id="command-help" type="button">Help</button>
+      </div>
+      <form id="command-form" class="command-form">
+        <input id="command-input" name="command" autocomplete="off" spellcheck="false" placeholder='start notepad.exe  |  foreground  |  keys CTRL+S  |  text "hello"  |  click 400 300'>
+        <button type="submit">Run</button>
+      </form>
+      <div id="command-help-panel" class="command-help" hidden>
+        <code>help</code>
+        <code>refresh</code>
+        <code>foreground</code>
+        <code>select 0x123456</code>
+        <code>start notepad.exe</code>
+        <code>focus</code>
+        <code>capture selected</code>
+        <code>capture full</code>
+        <code>state restore</code>
+        <code>move 80 80 900 640</code>
+        <code>keys CTRL+S</code>
+        <code>text "hello from Slasher"</code>
+        <code>click 400 300 left</code>
+        <code>mouse wheel 400 300 120</code>
+        <code>close</code>
+      </div>
+    </section>
+
+    <section class="panel script-panel">
+      <div class="panel-title">
+        <h2>Script</h2>
+        <div class="toolbar">
+          <button id="script-run" type="button">Run</button>
+          <button id="script-check" type="button">Check</button>
+          <button id="script-stop" type="button" disabled>Stop</button>
+          <button id="script-save" type="button">Save</button>
+          <button id="script-load-sample" type="button">Sample</button>
+          <button id="script-clear" type="button">Clear</button>
+        </div>
+      </div>
+      <textarea id="script-input" class="script-input" spellcheck="false" rows="9"># One command per line.
+# Blank lines and lines starting with # are skipped.
+start notepad.exe
+wait 800
+app select notepad
+text "hello from Slasher script"
+capture selected</textarea>
+      <div class="script-status">
+        <span id="script-status-text">idle</span>
+      </div>
+    </section>
+
+    <section class="panel target-panel">
+      <div class="panel-title">
+        <h2>Target</h2>
+        <div class="toolbar">
+          <button id="refresh-windows" type="button">Refresh</button>
+          <button id="use-foreground" type="button">Foreground</button>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>Title filter</span>
+        <input id="window-filter" type="search" placeholder="Notepad">
+      </label>
+
+      <div id="selected-target" class="selected-target">No window selected</div>
+      <div id="window-list" class="window-list"></div>
+    </section>
+
+    <section class="panel action-panel">
+      <div class="panel-title">
+        <h2>Actions</h2>
+        <button id="capture" type="button">Capture</button>
+      </div>
+
+      <div class="grid two">
+        <form id="start-form" class="group">
+          <h3>Start App</h3>
+          <label class="field">
+            <span>File name</span>
+            <input name="fileName" placeholder="notepad.exe" required>
+          </label>
+          <label class="field">
+            <span>Arguments</span>
+            <input name="arguments" placeholder="">
+          </label>
+          <button type="submit">Start</button>
+        </form>
+
+        <div class="group">
+          <h3>Window</h3>
+          <div class="button-row">
+            <button id="focus" type="button">Focus</button>
+            <button id="restore" type="button">Restore</button>
+            <button id="minimize" type="button">Minimize</button>
+            <button id="maximize" type="button">Maximize</button>
+            <button id="close" class="danger" type="button">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <form id="move-form" class="group compact">
+        <h3>Move / Resize</h3>
+        <div class="grid four">
+          <label class="field"><span>X</span><input name="x" type="number" value="80"></label>
+          <label class="field"><span>Y</span><input name="y" type="number" value="80"></label>
+          <label class="field"><span>Width</span><input name="width" type="number" value="900" min="1"></label>
+          <label class="field"><span>Height</span><input name="height" type="number" value="640" min="1"></label>
+        </div>
+        <button type="submit">Apply</button>
+      </form>
+
+      <div class="grid two">
+        <form id="keys-form" class="group">
+          <h3>Keys</h3>
+          <label class="field">
+            <span>Chord</span>
+            <input name="keys" placeholder="CTRL+S" required>
+          </label>
+          <button type="submit">Send Keys</button>
+        </form>
+
+        <form id="text-form" class="group">
+          <h3>Text</h3>
+          <label class="field">
+            <span>Text</span>
+            <textarea name="text" rows="4" placeholder="hello from Slasher" required></textarea>
+          </label>
+          <button type="submit">Type Text</button>
+        </form>
+      </div>
+
+      <form id="mouse-form" class="group compact">
+        <h3>Mouse</h3>
+        <div class="grid four">
+          <label class="field">
+            <span>Action</span>
+            <select name="action">
+              <option value="click">click</option>
+              <option value="move">move</option>
+              <option value="down">down</option>
+              <option value="up">up</option>
+              <option value="wheel">wheel</option>
+            </select>
+          </label>
+          <label class="field"><span>X</span><input name="x" type="number" placeholder="400"></label>
+          <label class="field"><span>Y</span><input name="y" type="number" placeholder="300"></label>
+          <label class="field">
+            <span>Button</span>
+            <select name="button">
+              <option value="left">left</option>
+              <option value="right">right</option>
+              <option value="middle">middle</option>
+            </select>
+          </label>
+        </div>
+        <button type="submit">Send Mouse</button>
+      </form>
+    </section>
+
+    <section class="panel run-panel">
+      <div class="panel-title">
+        <h2>Run Report</h2>
+        <div class="panel-actions">
+          <button id="refresh-runs" type="button">Refresh Runs</button>
+          <button id="clear-run-report" type="button">Clear</button>
+        </div>
+      </div>
+      <div id="run-summary" class="run-summary">No script run yet</div>
+      <div id="recent-runs" class="recent-runs"></div>
+      <div id="run-events" class="run-events"></div>
+    </section>
+
+    <section class="panel observe-panel">
+      <div class="panel-title">
+        <h2>Observation</h2>
+        <label class="checkbox">
+          <input id="capture-selected" type="checkbox" checked>
+          <span>selected window</span>
+        </label>
+      </div>
+      <div class="shot-frame">
+        <img id="shot" alt="Screenshot preview">
+        <div id="shot-empty">No screenshot yet</div>
+      </div>
+    </section>
+
+    <section class="panel log-panel">
+      <div class="panel-title">
+        <h2>Log</h2>
+        <button id="clear-log" type="button">Clear</button>
+      </div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+# Demonstrates error diagnostics across split script files.
+test step "main before include"
+include lib/failing-helper.slasher

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "slasher": {
+      "command": "node",
+      "args": [
+        "scripts/slasher-mcp.mjs"
+      ],
+      "cwd": "../..",
+      "env": {
+        "SLASHER_URL": "http://127.0.0.1:5055"
+      }
+    }
+  }
+}

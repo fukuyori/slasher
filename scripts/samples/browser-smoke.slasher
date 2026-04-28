@@ -1,0 +1,13 @@
+# Browser smoke script.
+# Run through scripts/run-browser-smoke.ps1 so __BROWSER__, __PROCESS__, and __URL__
+# are replaced with the requested browser and target URL.
+
+test step "launch __BROWSER__"
+browser launch __BROWSER__ __URL__
+wait 3000
+browser select __BROWSER__
+foreground as browserWindow
+assert value "${browserWindow.processName}" == "__PROCESS__"
+assert foreground title contains Slasher
+capture selected
+browser close
