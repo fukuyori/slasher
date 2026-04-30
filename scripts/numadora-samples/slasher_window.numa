@@ -1,0 +1,12 @@
+MODULE slasher_window
+    EXPORT WaitForTitle, Focus
+
+    FUNC WaitForTitle(title: String, timeoutMs: Int) -> String
+        Print("window.WaitForTitle " + title + " " + ToString(timeoutMs))
+        RETURN title
+    END
+
+    FUNC Focus(handle: Int)
+        Print("window.Focus " + ToString(handle))
+    END
+END

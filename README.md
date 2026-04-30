@@ -1,5 +1,7 @@
 # Slasher
 
+Current version: 0.2.0.
+
 Slasher is a small Windows automation server written in C#. It exposes HTTP APIs for starting applications, enumerating and manipulating windows, sending keyboard and mouse input, and taking screenshots.
 
 The intended use cases are local RPA-style workflows and AI-driven application testing.
@@ -16,11 +18,29 @@ The first control surface is a local web UI. It is intentionally direct: choose 
 
 ## Documentation
 
-- `docs/ai-agent-guide.md` - practical guide for AI agents that use Slasher for Windows app testing
-- `docs/ai-automation-contract.md` - run/event/error/evidence contract for automation results
-- `docs/ai-test-observability.md` - logging, capture, and evidence design for test automation
-- `docs/implementation-roadmap.md` - phased implementation plan
-- `docs/script-compiler-implementation-plan.md` - script language and compiler plan
+Start here:
+
+- `docs/README.md` - documentation index
+- `docs/ai-agent-guide.md` - practical guide for AI agents using Slasher
+- `docs/implementation-roadmap.md` - current implementation status and next work
+- `docs/language-system.md` - entry point for Slasher's Numadora-based script direction
+
+Design references:
+
+- `docs/architecture.md` - server structure and ownership
+- `docs/ai-automation-contract.md` - run/event/error/evidence contract
+- `docs/ai-test-observability.md` - logging, capture, and evidence design
+- `docs/security-policy.md` - security rules for powerful local PC automation
+- `docs/phase-12-rpa-expansion-plan.md` - RPA package expansion plan
+
+Language references:
+
+- `docs/numadora-migration-plan.md` - implementation plan for using Numadora in Slasher scripts
+- `docs/numadora-runtime-contract.md` - Phase N0 runtime/check/run boundary contract
+- `docs/slasher-script.md` - current Numadora script profile used by Slasher
+- `docs/numadora-language-spec.md` - Numadora の汎用言語仕様
+- `docs/slasher-numadora-integration.md` - Slasher bindings and Numadora integration model
+- `docs/migration-from-slasher-v1.md` - `.slasher` から `.numa` への移行ガイド
 
 ## Run
 
@@ -38,6 +58,24 @@ API metadata is available at:
 
 ```text
 http://127.0.0.1:5055/api
+```
+
+## Numadora N0 Probe
+
+During the Numadora migration, the local Numadora source checkout can be probed
+with:
+
+```powershell
+.\scripts\check-numadora.ps1 -Path scripts\numadora-samples\notepad-check.numa
+```
+
+Set `NUMADORA_HOME` if Numadora is not located at
+`D:\home\source\rust\Numadora`.
+
+To verify the full N0 probe state:
+
+```powershell
+.\scripts\verify-numadora-n0.ps1
 ```
 
 ## Codex Integration

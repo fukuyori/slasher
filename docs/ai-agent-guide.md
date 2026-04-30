@@ -26,6 +26,20 @@ The agent should use Slasher to:
 
 RPA workflows are a secondary goal. For AI-driven tests, prefer repeatability, evidence, and clear failures over silent recovery.
 
+## Current Project State
+
+Phase 11 is complete as of commit `7caa579`.
+
+Agents can now rely on:
+
+- server-side script runs with structured events, logs, screenshots, and HTML reports
+- native window/control inspection and element actions
+- image matching
+- Selenium WebDriver browser automation for Edge, Chrome, and Firefox
+- browser screenshots, downloads, selected options, tabs/windows, and console logs
+
+The next work is Phase 12 RPA expansion. Start with `docs/phase-12-rpa-expansion-plan.md`, and keep new data/RPA packages aligned across HTTP, script, MCP, and documentation.
+
 ## Current Connection Modes
 
 ### HTTP
@@ -627,4 +641,6 @@ Current limitations:
 - `docs/ai-automation-contract.md`
 - `docs/ai-test-observability.md`
 - `docs/implementation-roadmap.md`
-- `docs/script-compiler-implementation-plan.md`
+- `docs/language-system.md`
+- `docs/slasher-script.md`
+- `docs/slasher-numadora-integration.md`

@@ -1,0 +1,7 @@
+MODULE slasher_input
+    EXPORT Text
+
+    FUNC Text(content: String)
+        Print("input.Text " + content)
+    END
+END

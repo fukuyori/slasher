@@ -1,0 +1,15 @@
+MODULE slasher_io
+    EXPORT Step, Log, Wait
+
+    FUNC Step(name: String)
+        Print("step " + name)
+    END
+
+    FUNC Log(message: String)
+        Print(message)
+    END
+
+    FUNC Wait(ms: Int)
+        Print("wait " + ToString(ms))
+    END
+END

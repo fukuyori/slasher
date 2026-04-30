@@ -1,0 +1,7 @@
+MODULE slasher_test
+    EXPORT AssertForegroundTitle
+
+    FUNC AssertForegroundTitle(operator: String, expected: String)
+        Print("test.AssertForegroundTitle " + operator + " " + expected)
+    END
+END

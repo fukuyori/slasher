@@ -1,0 +1,8 @@
+MODULE slasher_app
+    EXPORT Start
+
+    FUNC Start(fileName: String) -> Int
+        Print("app.Start " + fileName)
+        RETURN 1
+    END
+END

@@ -10,6 +10,19 @@ These are not optional RPA conveniences. They are the evidence layer that lets a
 
 See `docs/ai-automation-contract.md` for the broader action/result/report schema.
 
+## Current Implementation Status
+
+As of Phase 11 completion (`7caa579`), the core evidence loop is implemented for server-side script runs:
+
+- `run.json`, `events.jsonl`, `summary.txt`, script logs, and HTML reports
+- artifact readback through HTTP and MCP
+- automatic error/failure screenshots
+- optional per-step screenshot policy
+- native element events and assertions
+- browser screenshots and browser console logs through WebDriver
+
+Phase 12 work should reuse this evidence model for data/RPA packages instead of adding separate report formats.
+
 ## Execution Event Model
 
 Every script command and API action should produce an execution event.

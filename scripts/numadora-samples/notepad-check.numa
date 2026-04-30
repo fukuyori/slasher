@@ -1,0 +1,17 @@
+IMPORT slasher_app AS app
+IMPORT slasher_window AS win
+IMPORT slasher_input AS input
+IMPORT slasher_io AS io
+IMPORT slasher_test AS test
+
+FUNC main()
+    io.Step("open notepad")
+    LET handle := app.Start("notepad.exe")
+
+    LET title := win.WaitForTitle("Notepad", 10000)
+    win.Focus(handle)
+
+    io.Step("type text")
+    input.Text("Slasher Numadora smoke")
+    test.AssertForegroundTitle("contains", title)
+END
