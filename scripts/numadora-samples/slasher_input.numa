@@ -2,6 +2,6 @@ MODULE slasher_input
     EXPORT Text
 
     FUNC Text(content: String)
-        Print("input.Text " + content)
+        Print("__SLASHER_HOST_CALL__ slasher_input.Text " + content)
     END
 END

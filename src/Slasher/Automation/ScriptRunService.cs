@@ -15,6 +15,7 @@ public sealed partial class ScriptRunService
     private readonly FileSystemAutomationService _files;
     private readonly ClipboardService _clipboard;
     private readonly AutomationRunArtifactStore _artifacts;
+    private readonly NumadoraPolicyEvaluator _numadoraPolicy = new();
     private readonly string _workspaceRoot;
 
     public ScriptRunService(
@@ -64,6 +65,18 @@ public sealed partial class ScriptRunService
             return new ScriptRunResponse(false, state.Report, state.Events, state.FinalError);
         }
 
+        if (IsNumadoraRun(request.Language, request.Path))
+        {
+            return await RunNumadoraPreflightAsync(
+                new ScriptCheckRequest(Path: request.Path, Language: "numadora"),
+                name,
+                sourceFile,
+                request.StopOnError,
+                request.CapturePolicy,
+                request.Purpose,
+                cancellationToken);
+        }
+
         var runReport = _artifacts.StartRun(
             name,
             AutomationRunMode.Script,
@@ -88,11 +101,23 @@ public sealed partial class ScriptRunService
             return new ScriptRunResponse(false, state.Report, state.Events, state.FinalError);
         }
 
-        return await ExecuteRunAsync(lines, runReport, new ScriptRunRequest(string.Empty, name, request.StopOnError, request.CapturePolicy), cancellationToken);
+        return await ExecuteRunAsync(lines, runReport, new ScriptRunRequest(string.Empty, name, request.StopOnError, request.CapturePolicy, Purpose: request.Purpose), cancellationToken);
     }
 
     public async Task<ScriptRunResponse> RunAsync(ScriptRunRequest request, CancellationToken cancellationToken)
     {
+        if (IsNumadoraRun(request.Language, null))
+        {
+            return await RunNumadoraPreflightAsync(
+                new ScriptCheckRequest(Script: request.Script, Language: "numadora"),
+                string.IsNullOrWhiteSpace(request.Name) ? "numadora-script-run" : request.Name,
+                "POST /scripts/run",
+                request.StopOnError,
+                request.CapturePolicy,
+                request.Purpose,
+                cancellationToken);
+        }
+
         var report = _artifacts.StartRun(
             string.IsNullOrWhiteSpace(request.Name) ? "script-run" : request.Name,
             AutomationRunMode.Script,
@@ -125,6 +150,18 @@ public sealed partial class ScriptRunService
         }
 
         return await ExecuteRunAsync(lines, report, request, cancellationToken);
+    }
+
+    private static bool IsNumadoraRun(string? language, string? path)
+    {
+        if (language?.Equals("numadora", StringComparison.OrdinalIgnoreCase) == true
+            || language?.Equals("numa", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(path)
+            && Path.GetExtension(path).Equals(".numa", StringComparison.OrdinalIgnoreCase);
     }
 }
 

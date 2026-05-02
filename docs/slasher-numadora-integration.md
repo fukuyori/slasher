@@ -57,6 +57,28 @@ decision. If Numadora later gains package-style module paths, Windows-control
 libraries can move toward a broader namespace in a separate language-level
 change.
 
+## Initial Capability Metadata
+
+Slasher now keeps an initial host binding catalog for check-time reporting. The
+catalog maps known Numadora-facing calls to the security classes in
+`security-policy.md`:
+
+| Module | Function | Capability class | Profile |
+|---|---|---|---|
+| `slasher_app` | `Start` | Process/app | `interactive` |
+| `slasher_window` | `WaitForTitle` | Observe | `observe` |
+| `slasher_window` | `Focus` | User-input | `interactive` |
+| `slasher_input` | `Text` | User-input | `interactive` |
+| `slasher_io` | `Step` | Observe | `observe` |
+| `slasher_io` | `Log` | Observe | `observe` |
+| `slasher_io` | `Wait` | Observe | `observe` |
+| `slasher_test` | `AssertForegroundTitle` | Observe | `observe` |
+
+`/scripts/check` reports these as `requiredCapabilities` for `.numa` scripts
+when it can statically recognize `IMPORT module AS alias` plus
+`alias.Function(...)` calls. This is a check-time preview only; run-time refusal
+for missing policy profiles belongs to N3/N4.
+
 ## Runtime Boundary
 
 Slasher should host Numadora through a narrow runtime boundary:

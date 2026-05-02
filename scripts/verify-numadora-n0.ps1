@@ -7,6 +7,7 @@ $ErrorActionPreference = "Stop"
 $root = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")
 $check = Join-Path $PSScriptRoot "check-numadora.ps1"
 $probeId = [Guid]::NewGuid().ToString("N")
+$targetRoot = Join-Path $root ".numadora-targets"
 
 if ([string]::IsNullOrWhiteSpace($NumadoraHome)) {
     $candidate = "D:\home\source\rust\Numadora"
@@ -28,7 +29,7 @@ Write-Host "N0 probe: checking Numadora baseline module sample"
 & $check `
     -Path $baselineSample `
     -NumadoraHome $NumadoraHome `
-    -TargetDir (Join-Path $root ".numadora-target-n0-baseline-$probeId")
+    -TargetDir (Join-Path $targetRoot "n0-baseline-$probeId")
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
@@ -37,7 +38,7 @@ Write-Host "N0 probe: checking Slasher target sample"
 & $check `
     -Path (Join-Path $root "scripts\numadora-samples\notepad-check.numa") `
     -NumadoraHome $NumadoraHome `
-    -TargetDir (Join-Path $root ".numadora-target-n0-slasher-$probeId")
+    -TargetDir (Join-Path $targetRoot "n0-slasher-$probeId")
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }

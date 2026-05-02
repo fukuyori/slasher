@@ -2,6 +2,6 @@ MODULE slasher_test
     EXPORT AssertForegroundTitle
 
     FUNC AssertForegroundTitle(operator: String, expected: String)
-        Print("test.AssertForegroundTitle " + operator + " " + expected)
+        Print("__SLASHER_HOST_CALL__ slasher_test.AssertForegroundTitle " + operator + " " + expected)
     END
 END

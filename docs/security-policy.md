@@ -101,6 +101,8 @@ contract:
   inside an action
 - script reports include the capability profile used for the run
 - imported modules should not grant hidden extra powers
+- host calls should be evaluated with lineage-aware policy input as described
+  in `numadora-lineage-policy-plan.md`
 
 Initial profiles:
 
@@ -184,6 +186,8 @@ Before N1/N2 host bindings:
 - define initial capability metadata for the first Slasher Numadora modules
 - make check/run contracts capable of carrying required capabilities
 - keep sample `.numa` scripts in the `interactive` profile
+- define the local lineage and policy input shape before executing real
+  Numadora host calls
 
 Before Phase 12 destructive expansion:
 

@@ -170,6 +170,22 @@ stable.
 - [ ] Implementation-ready `.numa` examples
 - [ ] Numadora runtime integration plan
 - [ ] Slasher Numadora module stubs or host bindings
+- [x] Initial `.numa` check dispatch
+- [x] MCP/Web UI language selector for `.numa` check
+- [x] Initial Numadora binding capability metadata
+- [x] Safe `.numa` run preflight
+- [x] Pure `.numa` run artifact path with stdout/stderr logs
+- [x] Web UI run entrypoint for safe `.numa` run path
+- [x] Blocked host-call capability details in `.numa` run artifacts
+- [x] Blocked host-call capability display in MCP/Web UI summaries
+- [x] Diagnostic host-call trace capture from safe Numadora stubs
+- [x] Diagnostic host-call trace display in MCP/Web UI summaries
+- [x] Structured host-call logs on successful safe `.numa` runs
+- [x] Observed safe host calls as `numadora.hostCall` timeline events
+- [x] Lineage-aware Numadora policy plan
+- [x] Initial Numadora run lineage metadata and policy input capture
+- [x] Initial Numadora in-process policy decision capture
+- [x] Numadora policy evaluator allow/deny tests
 - [ ] `.numa` check/run support
 - [ ] Security policy gates for Numadora host bindings
 - [ ] Important `.slasher` samples ported to `.numa`

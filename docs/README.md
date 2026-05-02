@@ -15,6 +15,7 @@ Slasher's Numadora-based script direction, and AI-facing automation contracts.
 - `ai-automation-contract.md` - action/result/report schema
 - `ai-test-observability.md` - evidence, screenshots, logs, and failure reporting
 - `security-policy.md` - security rules for powerful local PC automation
+- `numadora-lineage-policy-plan.md` - lineage-aware policy plan for Numadora host calls
 
 ## Language
 

@@ -28,7 +28,7 @@ if (-not (Test-Path -LiteralPath $manifest)) {
 $resolvedPath = Resolve-Path -LiteralPath $Path
 $scriptRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($TargetDir)) {
-    $TargetDir = Join-Path $scriptRoot ".numadora-target"
+    $TargetDir = Join-Path (Join-Path $scriptRoot ".numadora-targets") "default"
 }
 elseif (-not [System.IO.Path]::IsPathRooted($TargetDir)) {
     $TargetDir = Join-Path (Get-Location) $TargetDir

@@ -684,11 +684,12 @@ const tools = [
   },
   {
     name: "slasher_check_script",
-    description: "Validate an inline Slasher script without executing GUI actions. Use this before running generated or edited scripts.",
+    description: "Validate an inline Slasher or Numadora script without executing GUI actions. Use this before running generated or edited scripts.",
     inputSchema: {
       type: "object",
       properties: {
-        script: { type: "string" }
+        script: { type: "string" },
+        language: { type: "string", enum: ["slasher", "numadora", "numa"] }
       },
       required: ["script"],
       additionalProperties: false
@@ -696,11 +697,12 @@ const tools = [
   },
   {
     name: "slasher_check_script_file",
-    description: "Validate a .slasher script file inside the Slasher workspace without executing GUI actions.",
+    description: "Validate a .slasher or .numa script file inside the Slasher workspace without executing GUI actions.",
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string" }
+        path: { type: "string" },
+        language: { type: "string", enum: ["slasher", "numadora", "numa"] }
       },
       required: ["path"],
       additionalProperties: false
@@ -708,12 +710,14 @@ const tools = [
   },
   {
     name: "slasher_run_script",
-    description: "Run a Slasher command script through the local server and return the structured run report, assertions, artifact paths, and screenshot evidence.",
+    description: "Run a Slasher or Numadora script through the local server and return the structured run report, assertions, artifact paths, and screenshot evidence.",
     inputSchema: {
       type: "object",
       properties: {
         script: { type: "string" },
-        stopOnError: { type: "boolean" }
+        stopOnError: { type: "boolean" },
+        language: { type: "string", enum: ["slasher", "numadora", "numa"] },
+        purpose: { type: "string" }
       },
       required: ["script"],
       additionalProperties: false
@@ -721,12 +725,14 @@ const tools = [
   },
   {
     name: "slasher_run_script_file",
-    description: "Run a .slasher script file inside the Slasher workspace and return the structured run report and evidence.",
+    description: "Run a .slasher or .numa script file inside the Slasher workspace and return the structured run report and evidence.",
     inputSchema: {
       type: "object",
       properties: {
         path: { type: "string" },
-        stopOnError: { type: "boolean" }
+        stopOnError: { type: "boolean" },
+        language: { type: "string", enum: ["slasher", "numadora", "numa"] },
+        purpose: { type: "string" }
       },
       required: ["path"],
       additionalProperties: false
@@ -841,7 +847,7 @@ async function handleMessage(message) {
         },
         serverInfo: {
           name: "slasher-mcp",
-          version: "0.2.0"
+          version: "0.2.1"
         }
       });
       return;
@@ -1227,14 +1233,16 @@ async function callTool(name, args) {
 
     case "slasher_check_script": {
       const check = await postJsonAllowError("/scripts/check", {
-        script: args.script
+        script: args.script,
+        language: args.language
       });
       return checkScriptResult(check);
     }
 
     case "slasher_check_script_file": {
       const check = await postJsonAllowError("/scripts/check", {
-        path: args.path
+        path: args.path,
+        language: args.language
       });
       return checkScriptResult(check);
     }
@@ -1243,6 +1251,8 @@ async function callTool(name, args) {
       const run = await postJsonAllowError("/scripts/run", {
         script: args.script,
         stopOnError: args.stopOnError ?? true,
+        language: args.language,
+        purpose: args.purpose,
         name: "mcp-script-run"
       });
       return runScriptResult(run);
@@ -1252,6 +1262,8 @@ async function callTool(name, args) {
       const run = await postJsonAllowError("/scripts/run-file", {
         path: args.path,
         stopOnError: args.stopOnError ?? true,
+        language: args.language,
+        purpose: args.purpose,
         name: "mcp-script-file-run"
       });
       return runScriptResult(run);
@@ -1296,7 +1308,9 @@ async function callTool(name, args) {
 function checkScriptResult(check) {
   const summary = {
     ok: check.ok,
+    language: check.language || "slasher",
     lineCount: check.lines?.length ?? 0,
+    requiredCapabilities: check.requiredCapabilities || [],
     diagnostics: check.diagnostics || []
   };
 
@@ -1371,6 +1385,11 @@ function buildRunSummary(run, evidence) {
           expected: error.expected,
           actual: error.actual,
           diagnostics: error.details?.diagnostics || [],
+          requiredCapabilities: error.details?.requiredCapabilities || [],
+          blockedCapabilities: error.details?.blockedCapabilities || [],
+          hostCalls: error.details?.hostCalls || [],
+          policyDecisions: error.details?.policyDecisions || [],
+          runMode: error.details?.runMode || null,
           selectedWindow: error.details?.selectedWindow || null,
           foregroundWindow: error.details?.foregroundWindow || null
         }
@@ -1430,6 +1449,31 @@ function formatRunSummary(summary) {
       }
     }
 
+    if (summary.error.blockedCapabilities?.length > 0) {
+      lines.push("", "Blocked Capabilities:");
+      for (const capability of summary.error.blockedCapabilities) {
+        lines.push(`- ${formatCapability(capability)}`);
+      }
+    }
+
+    if (summary.error.hostCalls?.length > 0) {
+      lines.push("", "Host Calls:");
+      for (const call of summary.error.hostCalls) {
+        lines.push(`- ${formatHostCall(call)}`);
+      }
+    }
+
+    if (summary.error.policyDecisions?.length > 0) {
+      lines.push("", "Policy Decisions:");
+      for (const decision of summary.error.policyDecisions) {
+        lines.push(`- ${formatPolicyDecision(decision)}`);
+      }
+    }
+
+    if (summary.error.runMode) {
+      lines.push(`Run Mode: ${summary.error.runMode}`);
+    }
+
     const selected = formatWindowSummary(summary.error.selectedWindow);
     const foreground = formatWindowSummary(summary.error.foregroundWindow);
     if (selected || foreground) {
@@ -1469,6 +1513,28 @@ function formatRunSummary(summary) {
   return lines.join("\n");
 }
 
+function formatCapability(capability) {
+  const name = [capability.module, capability.function].filter(Boolean).join(".");
+  const profile = capability.profile ? ` (${capability.profile})` : "";
+  const capabilityClass = capability.capabilityClass ? ` - ${capability.capabilityClass}` : "";
+  return `${name || "capability"}${profile}${capabilityClass}`;
+}
+
+function formatHostCall(call) {
+  const name = [call.module, call.function].filter(Boolean).join(".");
+  const args = Array.isArray(call.arguments) && call.arguments.length > 0
+    ? ` ${call.arguments.join(" ")}`
+    : "";
+  const decision = call.policyDecision
+    ? ` [policy=${call.policyDecision.allow ? "allow" : "deny"}:${call.policyDecision.code || "policy"}]`
+    : "";
+  return `${name || "host-call"}${args}${decision}`;
+}
+
+function formatPolicyDecision(decision) {
+  return `${decision.allow ? "allow" : "deny"}:${decision.code || "policy"} ${decision.reason || ""}`.trim();
+}
+
 function summarizeRunReport(report) {
   return {
     status: report.status,
@@ -1498,7 +1564,12 @@ function summarizeRunReport(report) {
           message: report.error.message,
           action: report.error.action,
           source: report.error.source,
-          diagnostics: report.error.details?.diagnostics || []
+          diagnostics: report.error.details?.diagnostics || [],
+          requiredCapabilities: report.error.details?.requiredCapabilities || [],
+          blockedCapabilities: report.error.details?.blockedCapabilities || [],
+          hostCalls: report.error.details?.hostCalls || [],
+          policyDecisions: report.error.details?.policyDecisions || [],
+          runMode: report.error.details?.runMode || null
         }
       : null
   };

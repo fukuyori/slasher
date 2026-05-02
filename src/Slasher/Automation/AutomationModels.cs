@@ -29,28 +29,36 @@ public sealed record StartAutomationRunRequest(
     string Name,
     string Mode = AutomationRunMode.Http,
     string? EntryPoint = null,
-    CapturePolicy? CapturePolicy = null);
+    CapturePolicy? CapturePolicy = null,
+    string? Purpose = null);
 
 public sealed record ScriptRunRequest(
     string Script,
     string? Name = null,
     bool StopOnError = true,
-    CapturePolicy? CapturePolicy = null);
+    CapturePolicy? CapturePolicy = null,
+    string? Language = null,
+    string? Purpose = null);
 
 public sealed record ScriptFileRunRequest(
     string Path,
     string? Name = null,
     bool StopOnError = true,
-    CapturePolicy? CapturePolicy = null);
+    CapturePolicy? CapturePolicy = null,
+    string? Language = null,
+    string? Purpose = null);
 
 public sealed record ScriptCheckRequest(
     string? Script = null,
-    string? Path = null);
+    string? Path = null,
+    string? Language = null);
 
 public sealed record ScriptCheckResponse(
     bool Ok,
     IReadOnlyList<ScriptDiagnostic> Diagnostics,
-    IReadOnlyList<ScriptCheckLine> Lines);
+    IReadOnlyList<ScriptCheckLine> Lines,
+    string Language = "slasher",
+    IReadOnlyList<ScriptCapabilityRequirement>? RequiredCapabilities = null);
 
 public sealed record ScriptDiagnostic(
     string Code,
@@ -60,7 +68,8 @@ public sealed record ScriptDiagnostic(
     int? Column = null,
     string? Command = null,
     string? Function = null,
-    IReadOnlyList<AutomationSourceFrame>? Stack = null);
+    IReadOnlyList<AutomationSourceFrame>? Stack = null,
+    IReadOnlyDictionary<string, object?>? Details = null);
 
 public sealed record ScriptCheckLine(
     int Sequence,
@@ -68,6 +77,32 @@ public sealed record ScriptCheckLine(
     string Command,
     string SourceFile,
     string? Function);
+
+public sealed record ScriptCapabilityRequirement(
+    string Module,
+    string Function,
+    string CapabilityClass,
+    string Profile,
+    string Reason);
+
+public sealed record NumadoraPolicyInput(
+    string Language,
+    string RunId,
+    string Purpose,
+    string Surface,
+    ScriptCapabilityRequirement? Capability,
+    NumadoraPolicyHostCall HostCall,
+    IReadOnlyDictionary<string, object?> Lineage);
+
+public sealed record NumadoraPolicyHostCall(
+    string Module,
+    string Function,
+    IReadOnlyList<string> Arguments);
+
+public sealed record NumadoraPolicyDecision(
+    bool Allow,
+    string Code,
+    string Reason);
 
 public sealed record ScriptRunResponse(
     bool Ok,

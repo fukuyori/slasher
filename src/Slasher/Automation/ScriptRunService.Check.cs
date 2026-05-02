@@ -6,6 +6,11 @@ public sealed partial class ScriptRunService
 {
     public async Task<ScriptCheckResponse> CheckAsync(ScriptCheckRequest request, CancellationToken cancellationToken)
     {
+        if (IsNumadoraCheck(request))
+        {
+            return await CheckNumadoraAsync(request, cancellationToken);
+        }
+
         var diagnostics = new List<ScriptDiagnostic>();
         IReadOnlyList<ScriptLine> lines = [];
 
@@ -23,6 +28,18 @@ public sealed partial class ScriptRunService
             diagnostics.Count == 0,
             diagnostics,
             lines.Select(ToCheckLine).ToArray());
+    }
+
+    private static bool IsNumadoraCheck(ScriptCheckRequest request)
+    {
+        if (request.Language?.Equals("numadora", StringComparison.OrdinalIgnoreCase) == true
+            || request.Language?.Equals("numa", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(request.Path)
+            && Path.GetExtension(request.Path).Equals(".numa", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<IReadOnlyList<ScriptLine>> ParseCheckLinesAsync(

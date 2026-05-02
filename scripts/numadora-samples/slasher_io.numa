@@ -2,7 +2,7 @@ MODULE slasher_io
     EXPORT Step, Log, Wait
 
     FUNC Step(name: String)
-        Print("step " + name)
+        Print("__SLASHER_HOST_CALL__ slasher_io.Step " + name)
     END
 
     FUNC Log(message: String)
@@ -10,6 +10,6 @@ MODULE slasher_io
     END
 
     FUNC Wait(ms: Int)
-        Print("wait " + ToString(ms))
+        Print("__SLASHER_HOST_CALL__ slasher_io.Wait " + ToString(ms))
     END
 END

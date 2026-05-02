@@ -14,7 +14,10 @@ public static partial class SlasherEndpointExtensions
                 request.Name,
                 request.Mode,
                 request.EntryPoint,
-                request.CapturePolicy);
+                request.CapturePolicy,
+                string.IsNullOrWhiteSpace(request.Purpose)
+                    ? null
+                    : new Dictionary<string, object?> { ["purpose"] = request.Purpose });
 
             return Results.Ok(report);
         });

@@ -18,6 +18,9 @@ set message "hello from Slasher script"
 text "hello from Slasher script"
 text "\${message}"
 capture selected`;
+const numadoraSampleScript = `FUNC main()
+    Print("hello from Slasher Numadora check")
+END`;
 
 function log(message, payload) {
   const time = new Date().toLocaleTimeString();
@@ -420,6 +423,11 @@ function setScriptRunning(running) {
   $("script-status-text").textContent = running ? "running" : "idle";
 }
 
+function updateScriptLanguageState() {
+  $("script-run").disabled = state.scriptRunning;
+  $("script-status-text").textContent = state.scriptRunning ? "running" : "idle";
+}
+
 function saveScript() {
   localStorage.setItem("slasher.script", $("script-input").value);
   log("Saved script in this browser");
@@ -437,6 +445,7 @@ async function runScript() {
     return;
   }
 
+  const language = $("script-language").value;
   const script = $("script-input").value;
   if (scriptLines(script).length === 0) {
     log("Script is empty");
@@ -446,12 +455,12 @@ async function runScript() {
   state.stopScript = false;
   state.scriptAbortController = new AbortController();
   setScriptRunning(true);
-  log("Server script started");
+  log(`${language} script started`);
 
   try {
     const response = await api("/scripts/run", {
       method: "POST",
-      body: JSON.stringify({ script }),
+      body: JSON.stringify({ script, language, purpose: "web-ui-script" }),
       signal: state.scriptAbortController.signal
     });
     await renderScriptRunResponse(response);
@@ -489,9 +498,15 @@ async function checkScript() {
   try {
     const response = await api("/scripts/check", {
       method: "POST",
-      body: JSON.stringify({ script })
+      body: JSON.stringify({
+        script,
+        language: $("script-language").value
+      })
     });
-    log(`Script check passed (${response.lines.length} lines)`, response.lines);
+    log(`${response.language || "slasher"} check passed (${response.lines.length} lines)`, {
+      lines: response.lines,
+      requiredCapabilities: response.requiredCapabilities || []
+    });
     $("script-status-text").textContent = "check passed";
   } catch (error) {
     log("Script check failed", error.body?.diagnostics || error.body || { message: error.message });
@@ -775,12 +790,15 @@ function renderRunEvent(runId, event) {
 
 function renderDiagnostics(details) {
   const diagnostics = details?.diagnostics || [];
+  const blockedCapabilities = details?.blockedCapabilities || [];
+  const hostCalls = details?.hostCalls || [];
+  const policyDecisions = details?.policyDecisions || [];
   const selected = details?.selectedWindow;
   const foreground = details?.foregroundWindow;
   const panel = document.createElement("div");
   panel.className = "diagnostics";
 
-  if (diagnostics.length === 0 && !selected && !foreground) {
+  if (diagnostics.length === 0 && blockedCapabilities.length === 0 && hostCalls.length === 0 && policyDecisions.length === 0 && !details?.runMode && !selected && !foreground) {
     panel.hidden = true;
     return panel;
   }
@@ -800,6 +818,52 @@ function renderDiagnostics(details) {
     }
   }
 
+  if (blockedCapabilities.length > 0) {
+    const title = document.createElement("div");
+    title.className = "diagnostics-title";
+    title.textContent = "Blocked capabilities";
+    panel.appendChild(title);
+    for (const capability of blockedCapabilities) {
+      const item = document.createElement("div");
+      item.className = "diagnostic warning";
+      item.textContent = formatCapability(capability);
+      panel.appendChild(item);
+    }
+  }
+
+  if (hostCalls.length > 0) {
+    const title = document.createElement("div");
+    title.className = "diagnostics-title";
+    title.textContent = "Host calls";
+    panel.appendChild(title);
+    for (const call of hostCalls) {
+      const item = document.createElement("div");
+      item.className = "diagnostic info";
+      item.textContent = formatHostCall(call);
+      panel.appendChild(item);
+    }
+  }
+
+  if (policyDecisions.length > 0) {
+    const title = document.createElement("div");
+    title.className = "diagnostics-title";
+    title.textContent = "Policy decisions";
+    panel.appendChild(title);
+    for (const decision of policyDecisions) {
+      const item = document.createElement("div");
+      item.className = `diagnostic ${decision.allow ? "info" : "warning"}`;
+      item.textContent = formatPolicyDecision(decision);
+      panel.appendChild(item);
+    }
+  }
+
+  if (details?.runMode) {
+    const meta = document.createElement("div");
+    meta.className = "diagnostic-windows";
+    meta.textContent = `runMode=${details.runMode}`;
+    panel.appendChild(meta);
+  }
+
   const windows = [
     selected ? `selected=${formatDiagnosticWindow(selected)}` : null,
     foreground ? `foreground=${formatDiagnosticWindow(foreground)}` : null
@@ -812,6 +876,28 @@ function renderDiagnostics(details) {
   }
 
   return panel;
+}
+
+function formatCapability(capability) {
+  const name = [capability.module, capability.function].filter(Boolean).join(".");
+  const profile = capability.profile ? ` (${capability.profile})` : "";
+  const capabilityClass = capability.capabilityClass ? ` - ${capability.capabilityClass}` : "";
+  return `${name || "capability"}${profile}${capabilityClass}`;
+}
+
+function formatHostCall(call) {
+  const name = [call.module, call.function].filter(Boolean).join(".");
+  const args = Array.isArray(call.arguments) && call.arguments.length > 0
+    ? ` ${call.arguments.join(" ")}`
+    : "";
+  const decision = call.policyDecision
+    ? ` [policy=${call.policyDecision.allow ? "allow" : "deny"}:${call.policyDecision.code || "policy"}]`
+    : "";
+  return `${name || "host-call"}${args}${decision}`;
+}
+
+function formatPolicyDecision(decision) {
+  return `${decision.allow ? "allow" : "deny"}:${decision.code || "policy"} ${decision.reason || ""}`.trim();
 }
 
 function formatDiagnosticWindow(window) {
@@ -1963,6 +2049,7 @@ function bind() {
 
   $("script-run").addEventListener("click", () => runScript());
   $("script-check").addEventListener("click", () => checkScript());
+  $("script-language").addEventListener("change", updateScriptLanguageState);
   $("script-stop").addEventListener("click", () => {
     state.stopScript = true;
     state.scriptAbortController?.abort();
@@ -1970,7 +2057,9 @@ function bind() {
   });
   $("script-save").addEventListener("click", saveScript);
   $("script-load-sample").addEventListener("click", () => {
-    $("script-input").value = sampleScript;
+    $("script-input").value = $("script-language").value === "numadora"
+      ? numadoraSampleScript
+      : sampleScript;
     log("Loaded sample script");
   });
   $("script-clear").addEventListener("click", () => {
@@ -2104,6 +2193,7 @@ function bind() {
 
 loadSavedScript();
 bind();
+updateScriptLanguageState();
 checkHealth();
 refreshWindows().catch((error) => log(error.message));
 refreshRuns().catch((error) => log(error.message));

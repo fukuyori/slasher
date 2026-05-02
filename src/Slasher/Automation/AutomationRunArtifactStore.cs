@@ -22,7 +22,8 @@ public sealed partial class AutomationRunArtifactStore
         string name,
         string mode,
         string? entryPoint = null,
-        CapturePolicy? capturePolicy = null)
+        CapturePolicy? capturePolicy = null,
+        IReadOnlyDictionary<string, object?>? metadata = null)
     {
         var startedAt = DateTimeOffset.UtcNow;
         var runId = CreateRunId(startedAt, name);
@@ -61,7 +62,8 @@ public sealed partial class AutomationRunArtifactStore
             null,
             null,
             artifacts,
-            capturePolicy ?? new CapturePolicy());
+            capturePolicy ?? new CapturePolicy(),
+            metadata);
 
         WriteReport(report);
         File.WriteAllText(Path.Combine(_workspaceRoot, artifacts.Events), string.Empty);

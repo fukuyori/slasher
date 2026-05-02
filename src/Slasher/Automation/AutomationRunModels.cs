@@ -15,7 +15,8 @@ public sealed record AutomationRunReport(
     AutomationTarget? SelectedTarget,
     AutomationError? Error,
     AutomationRunArtifacts Artifacts,
-    CapturePolicy CapturePolicy);
+    CapturePolicy CapturePolicy,
+    IReadOnlyDictionary<string, object?>? Metadata = null);
 
 public sealed record AutomationRunArtifacts(
     string Run,

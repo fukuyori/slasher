@@ -69,9 +69,9 @@ Manual check helper:
 ```
 
 This helper uses a separate Cargo target directory under Slasher's workspace
-(`.numadora-target`) by default to avoid local `.cargo-lock` contention in the
-Numadora repository and to keep Slasher-side probes out of the Numadora
-worktree.
+(`.numadora-targets/default`) by default to avoid local `.cargo-lock`
+contention in the Numadora repository and to keep Slasher-side probes out of
+the Numadora worktree.
 
 ## Repository Layout
 
@@ -150,10 +150,52 @@ Mapping rules:
 
 - Slasher should preserve top-level `code`, `message`, `file`, `line`,
   `column`, and `severity`.
-- Richer Numadora diagnostics should be preserved under `details`.
+- Richer Numadora diagnostics are preserved on check diagnostics under
+  `details`, including `exitCode`, `stdout`, `stderr`, and combined `raw`
+  output from the Numadora process.
+- Current stderr-only Numadora failures are mapped to stable Slasher diagnostic
+  codes where possible: `numadora_import_failed`, `numadora_unknown_symbol`,
+  and `numadora_type_mismatch`. Other failures remain
+  `numadora_check_failed`.
 - Check mode must not execute GUI automation actions.
 
 ## Run Contract
+
+Current implementation status:
+
+- `.numa` run requests are routed away from the v1 `.slasher` parser.
+- Slasher runs Numadora check as a preflight before run.
+- `.numa` run requests accept an optional `purpose`; missing purpose defaults
+  to `local-test`
+- Numadora runs record lightweight lineage metadata, including purpose,
+  actor surface, script entry point, script SHA-256, local classification, and
+  redaction mode
+- pure `.numa` scripts, and scripts limited to the temporary `slasher_io` stub
+  surface, can run through the local Numadora CLI and capture stdout/stderr as
+  Slasher logs
+- successful local runs also parse structured `__SLASHER_HOST_CALL__` output
+  into event `hostCalls` parameters and `numadora.hostCall` log entries
+- each observed safe host call is also appended as a `numadora.hostCall` event
+  in the Slasher timeline; these events are diagnostic observations from the
+  Numadora stub path, not GUI/input execution
+- scripts requiring process, window, input, browser, file, clipboard, or other
+  host-call bindings create normal failed run artifacts with
+  `numadora_run_not_implemented`
+- host-call blocked failures include `requiredCapabilities`,
+  `blockedCapabilities`, `allowedLocalModules`, and `runMode` in error details
+- host-call blocked failures may also include a `hostCalls` trace captured from
+  Slasher-owned safe stub modules; this is diagnostic only and does not execute
+  GUI actions
+- observed host calls include a `policyInput` object for the future policy
+  evaluator; blocked host-call failures include `policyInputs` when trace data
+  is available
+- observed and blocked host calls also record initial `policyDecision` /
+  `policyDecisions` values from the in-process evaluator; these decisions are
+  currently diagnostic and are not yet used to execute real GUI/input actions
+- invalid `.numa` scripts create normal failed run artifacts with
+  `numadora_check_failed`
+- no GUI, browser, file, clipboard, or host-call action is executed by this
+  initial run path
 
 Input:
 

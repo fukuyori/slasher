@@ -1,6 +1,6 @@
 # Slasher
 
-Current version: 0.2.0.
+Current version: 0.2.1.
 
 Slasher is a small Windows automation server written in C#. It exposes HTTP APIs for starting applications, enumerating and manipulating windows, sending keyboard and mouse input, and taking screenshots.
 
@@ -8,7 +8,7 @@ The intended use cases are local RPA-style workflows and AI-driven application t
 
 ## Direction
 
-Slasher follows the same basic operating idea as Quorsel:
+Slasher follows a simple local automation loop:
 
 - Slasher executes GUI actions and captures observations
 - a human or AI agent chooses the next action from those observations

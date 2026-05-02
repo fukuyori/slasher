@@ -7,7 +7,8 @@ runner.
 It is an implementation plan, not a user migration guide. For user-facing
 syntax rewrites, see `migration-from-slasher-v1.md`.
 For security rules that apply to Numadora host bindings, see
-`security-policy.md`.
+`security-policy.md`. For lineage-aware host-call policy derived from
+`information_lineage_paper.md`, see `numadora-lineage-policy-plan.md`.
 
 ## Goals
 
@@ -124,10 +125,17 @@ Non-blocking follow-up work moved to later phases:
 - packaged/release Numadora executable discovery: packaging work
 - event streaming and host-call transport details for run mode: N3
 - replacing sample stub modules with real host bindings: N1/N2
+- lineage-aware host-call policy input and enforcement: N3/L0-L3 in
+  `numadora-lineage-policy-plan.md`
 
 ## Phase N1: Binding Skeleton
 
 Purpose: expose the smallest useful Windows-control surface as Numadora modules.
+
+Current status: initial binding capability metadata is implemented for the N0
+modules. Check mode can report recognized `requiredCapabilities` for
+alias-qualified calls, but the modules are still source-level stubs and run
+mode does not yet enforce policy profiles.
 
 Initial current-Numadora modules:
 
@@ -178,6 +186,16 @@ Exit criteria:
 
 Purpose: let Slasher validate `.numa` scripts without running GUI actions.
 
+Current status: initial check-only dispatch is implemented. `POST
+/scripts/check` now accepts `.numa` files by extension and inline scripts with
+`language: "numadora"`, invokes the local Numadora checkout through Cargo, and
+returns Slasher `ScriptCheckResponse` diagnostics without executing GUI
+actions. MCP check tools and the Web UI script checker can pass the same
+language selector. Representative Numadora failures are classified as
+`numadora_import_failed`, `numadora_unknown_symbol`, and
+`numadora_type_mismatch` when the current Numadora stderr shape exposes those
+cases.
+
 Deliverables:
 
 - `POST /scripts/check` accepts `.numa` files or a language selector.
@@ -205,6 +223,30 @@ Exit criteria:
 
 Purpose: execute a small `.numa` script through the existing Slasher server and
 produce normal run artifacts.
+
+Current status: run requests can enter the Numadora path and produce normal
+Slasher run artifacts. The current path runs Numadora check first, then can run
+pure Numadora scripts, or scripts limited to the temporary `slasher_io` stub
+surface, through the local Numadora CLI and capture stdout/stderr as Slasher
+logs. Structured stub output is parsed into event `hostCalls` and
+`numadora.hostCall` log entries, and each observed safe host call is appended
+as a `numadora.hostCall` timeline event. Scripts that require process, window,
+input, browser, file, clipboard, or other host-call bindings still fail with
+`numadora_run_not_implemented`.
+Invalid scripts fail with `numadora_check_failed` before any GUI action can run.
+MCP run tools and the Web UI script runner pass the same `language` selector.
+Blocked host-call runs include `blockedCapabilities`, `allowedLocalModules`,
+and `runMode` details so the next host bridge can attach policy decisions
+without changing the outer run artifact shape. MCP run summaries and the Web
+UI diagnostics panel surface both the blocked capability list and the
+diagnostic `hostCalls` trace. The current blocked path also runs the safe
+Numadora stub modules to capture that trace; it records call order and
+arguments but still does not execute GUI actions.
+Current runs also carry the first lineage/policy artifacts from
+`numadora-lineage-policy-plan.md`: optional `purpose`, script SHA-256 lineage
+metadata, per-host-call `policyInput` objects, and diagnostic
+`policyDecision` results from the in-process evaluator. These are recorded for
+inspection only; real GUI/input host-call execution is still a future step.
 
 First scenario:
 
@@ -380,11 +422,11 @@ window/input, assertions, artifacts, element checks, and browser checks.
 
 ## Immediate Next Steps
 
-1. Add a language selector or extension-based dispatch for `POST /scripts/check`.
-2. Add a check-only test for `scripts/numadora-samples/notepad-check.numa`.
-3. Replace sample stub modules with Slasher host bindings that keep the same
+1. Parse richer source locations from Numadora diagnostics once the diagnostic
+   shape stabilizes.
+2. Replace sample stub modules with Slasher host bindings that keep the same
    Numadora-facing function signatures.
-4. Draft the host-call protocol implementation for Slasher API calls from
+3. Draft the host-call protocol implementation for Slasher API calls from
    Numadora.
-5. Update `slasher-script.md` and `slasher-numadora-integration.md` to use
+4. Update `slasher-script.md` and `slasher-numadora-integration.md` to use
    current Numadora syntax when binding names change.

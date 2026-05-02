@@ -361,6 +361,301 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.Contains(response.Lines, line => line.SourceFile == Path.Combine("scripts", "main.slasher") && line.Command == "call greet world as result");
     }
 
+    [Fact]
+    public async Task CheckAsync_CanCheckInlineNumadoraScript()
+    {
+        var response = await _service.CheckAsync(new ScriptCheckRequest(
+            """
+            FUNC main()
+                Print("hello from Numadora")
+            END
+            """,
+            Language: "numadora"),
+            CancellationToken.None);
+
+        Assert.True(response.Ok, AssertDiagnostics(response.Diagnostics));
+        Assert.Equal("numadora", response.Language);
+        Assert.Empty(response.Diagnostics);
+        Assert.Equal(3, response.Lines.Count);
+        Assert.All(response.Lines, line => Assert.EndsWith(".numa", line.SourceFile));
+        Assert.Empty(response.RequiredCapabilities ?? []);
+    }
+
+    [Fact]
+    public async Task CheckAsync_DispatchesNumaFilesToNumadora()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "hello.numa"),
+            """
+            FUNC main()
+                Print("hello from file")
+            END
+            """);
+
+        var response = await _service.CheckAsync(new ScriptCheckRequest(Path: Path.Combine("scripts", "hello.numa")), CancellationToken.None);
+
+        Assert.True(response.Ok, AssertDiagnostics(response.Diagnostics));
+        Assert.Equal("numadora", response.Language);
+        Assert.Empty(response.Diagnostics);
+        Assert.Empty(response.Lines);
+        Assert.Empty(response.RequiredCapabilities ?? []);
+    }
+
+    [Fact]
+    public async Task CheckAsync_ReportsNumadoraRequiredCapabilities()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "capabilities.numa"),
+            """
+            IMPORT slasher_app AS app
+            IMPORT slasher_window AS win
+            IMPORT slasher_input AS input
+            IMPORT slasher_io AS io
+            IMPORT slasher_test AS test
+
+            FUNC main()
+                io.Step("open notepad")
+                LET handle := app.Start("notepad.exe")
+                LET title := win.WaitForTitle("Notepad", 10000)
+                win.Focus(handle)
+                input.Text("hello")
+                test.AssertForegroundTitle("contains", title)
+            END
+            """);
+
+        var response = await _service.CheckAsync(new ScriptCheckRequest(
+            Path: Path.Combine("scripts", "capabilities.numa")),
+            CancellationToken.None);
+
+        Assert.True(response.Ok, AssertDiagnostics(response.Diagnostics));
+        var capabilities = response.RequiredCapabilities ?? [];
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_app"
+            && item.Function == "Start"
+            && item.CapabilityClass == "Process/app"
+            && item.Profile == "interactive");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_input"
+            && item.Function == "Text"
+            && item.CapabilityClass == "User-input"
+            && item.Profile == "interactive");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_test"
+            && item.Function == "AssertForegroundTitle"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
+    }
+
+    [Fact]
+    public async Task CheckAsync_ReturnsNumadoraDiagnostics()
+    {
+        var response = await _service.CheckAsync(new ScriptCheckRequest(
+            """
+            FUNC main(
+                Print("missing close")
+            END
+            """,
+            Language: "numadora"),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal("numadora", response.Language);
+        var diagnostic = Assert.Single(response.Diagnostics);
+        Assert.Equal("numadora_check_failed", diagnostic.Code);
+        Assert.False(string.IsNullOrWhiteSpace(diagnostic.Message));
+        Assert.NotNull(diagnostic.Details);
+        Assert.True(diagnostic.Details!.ContainsKey("exitCode"));
+        Assert.True(diagnostic.Details.ContainsKey("stdout"));
+        Assert.True(diagnostic.Details.ContainsKey("stderr"));
+        Assert.True(diagnostic.Details.ContainsKey("raw"));
+    }
+
+    [Theory]
+    [InlineData(
+        """
+        IMPORT missing_module AS missing
+
+        FUNC main()
+            missing.Call()
+        END
+        """,
+        "numadora_import_failed",
+        "failed to read")]
+    [InlineData(
+        """
+        FUNC main()
+            MissingCall()
+        END
+        """,
+        "numadora_unknown_symbol",
+        "undefined function")]
+    [InlineData(
+        """
+        FUNC main()
+            LET value: Int := "text"
+        END
+        """,
+        "numadora_type_mismatch",
+        "type mismatch")]
+    public async Task CheckAsync_ClassifiesRepresentativeNumadoraDiagnostics(
+        string script,
+        string expectedCode,
+        string expectedMessage)
+    {
+        var response = await _service.CheckAsync(new ScriptCheckRequest(
+            script,
+            Language: "numadora"),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal("numadora", response.Language);
+        var diagnostic = Assert.Single(response.Diagnostics);
+        Assert.Equal(expectedCode, diagnostic.Code);
+        Assert.Contains(expectedMessage, diagnostic.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(diagnostic.Details);
+        Assert.True(diagnostic.Details!.ContainsKey("raw"));
+    }
+
+    [Fact]
+    public async Task RunAsync_NumadoraCanRunPureScriptAndCaptureStdout()
+    {
+        var response = await _service.RunAsync(new ScriptRunRequest(
+            """
+            FUNC main()
+                Print("preflight")
+            END
+            """,
+            Name: "unit-numadora-run-preflight",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false),
+            Language: "numadora"),
+            CancellationToken.None);
+
+        Assert.True(response.Ok, response.Error?.Message);
+        Assert.Equal(AutomationRunStatus.Passed, response.Run.Status);
+        Assert.Null(response.Error);
+        Assert.NotNull(response.Run.Metadata);
+        Assert.Equal("local-test", response.Run.Metadata!["purpose"]);
+        Assert.True(response.Run.Metadata.ContainsKey("lineage"));
+        var runEvent = Assert.Single(response.Events);
+        Assert.Equal("numadora.run", runEvent.Action);
+        Assert.Contains(runEvent.Logs, item => item.Source == "numadora" && item.Message == "preflight");
+        Assert.True(File.Exists(Path.Combine(_workspaceRoot, response.Run.Artifacts.Run)));
+        Assert.True(File.Exists(Path.Combine(_workspaceRoot, response.Run.Artifacts.Events)));
+    }
+
+    [Fact]
+    public async Task RunFileAsync_NumaFileCanRunPureScriptAndCaptureStdout()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "run-preflight.numa"),
+            """
+            FUNC main()
+                Print("preflight file")
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", "run-preflight.numa"),
+            Name: "unit-numadora-file-run-preflight",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false)),
+            CancellationToken.None);
+
+        Assert.True(response.Ok, response.Error?.Message);
+        Assert.Equal(AutomationRunStatus.Passed, response.Run.Status);
+        Assert.Null(response.Error);
+        Assert.Equal(Path.Combine("scripts", "run-preflight.numa"), response.Run.EntryPoint);
+        var runEvent = Assert.Single(response.Events);
+        Assert.Equal("numadora.run", runEvent.Action);
+        Assert.Contains(runEvent.Logs, item => item.Source == "numadora" && item.Message == "preflight file");
+    }
+
+    [Fact]
+    public async Task RunFileAsync_NumaSlasherIoCallsAreCapturedAsHostCalls()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "io-host-calls.numa"),
+            """
+            IMPORT slasher_io AS io
+
+            FUNC main()
+                io.Step("phase one")
+                io.Log("ordinary log")
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", "io-host-calls.numa"),
+            Name: "unit-numadora-io-host-calls",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false),
+            Purpose: "lineage-smoke"),
+            CancellationToken.None);
+
+        Assert.True(response.Ok, response.Error?.Message);
+        Assert.NotNull(response.Run.Metadata);
+        Assert.Equal("lineage-smoke", response.Run.Metadata!["purpose"]);
+        var lineage = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(response.Run.Metadata["lineage"]);
+        Assert.Equal("lineage-smoke", lineage["purpose"]);
+        Assert.Equal(2, response.Events.Count);
+        var runEvent = response.Events[0];
+        Assert.Equal("numadora.run", runEvent.Action);
+        Assert.Contains(runEvent.Logs, item => item.Source == "numadora.hostCall" && item.Message.Contains("slasher_io.Step", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(runEvent.Logs, item => item.Source == "numadora" && item.Message == "ordinary log");
+        Assert.True(runEvent.Parameters.ContainsKey("hostCalls"));
+        var hostCallEvent = response.Events[1];
+        Assert.Equal("numadora.hostCall", hostCallEvent.Action);
+        Assert.Equal("slasher_io", hostCallEvent.Parameters["module"]);
+        Assert.Equal("Step", hostCallEvent.Parameters["function"]);
+        var policyInput = Assert.IsType<NumadoraPolicyInput>(hostCallEvent.Parameters["policyInput"]);
+        Assert.Equal("lineage-smoke", policyInput.Purpose);
+        Assert.Equal("slasher_io", policyInput.HostCall.Module);
+        var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
+        Assert.True(policyDecision.Allow);
+        Assert.Equal("numadora_policy_allowed_local_observe", policyDecision.Code);
+    }
+
+    [Fact]
+    public async Task RunFileAsync_NumaInteractiveBindingsReturnNotImplemented()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "interactive.numa"),
+            """
+            IMPORT slasher_app AS app
+
+            FUNC main()
+                app.Start("notepad.exe")
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", "interactive.numa"),
+            Name: "unit-numadora-interactive-preflight",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false)),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
+        Assert.Equal("numadora_run_not_implemented", response.Error?.Code);
+        Assert.Equal(Path.Combine("scripts", "interactive.numa"), response.Run.EntryPoint);
+        Assert.NotNull(response.Error?.Details);
+        Assert.Equal("numadora", response.Error!.Details!["language"]);
+        Assert.Equal("blocked-host-call", response.Error.Details["runMode"]);
+        Assert.True(response.Error.Details.ContainsKey("blockedCapabilities"));
+        Assert.True(response.Error.Details.ContainsKey("allowedLocalModules"));
+        Assert.True(response.Error.Details.ContainsKey("policyInputs"));
+        Assert.True(response.Error.Details.ContainsKey("policyDecisions"));
+        var hostCalls = Assert.IsAssignableFrom<IReadOnlyList<object>>(response.Error.Details["hostCalls"]);
+        Assert.NotEmpty(hostCalls);
+        Assert.Contains(hostCalls, item => item.ToString()!.Contains("slasher_app", StringComparison.OrdinalIgnoreCase));
+    }
+
     public void Dispose()
     {
         try
@@ -387,5 +682,78 @@ public sealed class ScriptRunServiceTests : IDisposable
         public string ContentRootPath { get; set; } = contentRootPath;
 
         public IFileProvider ContentRootFileProvider { get; set; } = new PhysicalFileProvider(contentRootPath);
+    }
+
+    private static string AssertDiagnostics(IReadOnlyList<ScriptDiagnostic> diagnostics)
+    {
+        return string.Join(Environment.NewLine, diagnostics.Select(item => $"{item.Code}: {item.Message}"));
+    }
+
+    private static async Task WriteNumadoraStubModulesAsync(string directory)
+    {
+        await File.WriteAllTextAsync(Path.Combine(directory, "slasher_app.numa"),
+            """
+            MODULE slasher_app
+                EXPORT Start
+
+                FUNC Start(fileName: String) -> Int
+                    Print("__SLASHER_HOST_CALL__ slasher_app.Start " + fileName)
+                    RETURN 1
+                END
+            END
+            """);
+        await File.WriteAllTextAsync(Path.Combine(directory, "slasher_window.numa"),
+            """
+            MODULE slasher_window
+                EXPORT WaitForTitle, Focus
+
+                FUNC WaitForTitle(title: String, timeoutMs: Int) -> String
+                    Print("__SLASHER_HOST_CALL__ slasher_window.WaitForTitle " + title + " " + ToString(timeoutMs))
+                    RETURN title
+                END
+
+                FUNC Focus(handle: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_window.Focus " + ToString(handle))
+                END
+            END
+            """);
+        await File.WriteAllTextAsync(Path.Combine(directory, "slasher_input.numa"),
+            """
+            MODULE slasher_input
+                EXPORT Text
+
+                FUNC Text(content: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_input.Text " + content)
+                END
+            END
+            """);
+        await File.WriteAllTextAsync(Path.Combine(directory, "slasher_io.numa"),
+            """
+            MODULE slasher_io
+                EXPORT Step, Log, Wait
+
+                FUNC Step(name: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_io.Step " + name)
+                END
+
+                FUNC Log(message: String)
+                    Print(message)
+                END
+
+                FUNC Wait(ms: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_io.Wait " + ToString(ms))
+                END
+            END
+            """);
+        await File.WriteAllTextAsync(Path.Combine(directory, "slasher_test.numa"),
+            """
+            MODULE slasher_test
+                EXPORT AssertForegroundTitle
+
+                FUNC AssertForegroundTitle(operator: String, expected: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_test.AssertForegroundTitle " + operator + " " + expected)
+                END
+            END
+            """);
     }
 }
