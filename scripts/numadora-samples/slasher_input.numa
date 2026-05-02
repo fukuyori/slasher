@@ -1,7 +1,27 @@
 MODULE slasher_input
-    EXPORT Text
+    EXPORT Text, Keys, Mouse, Wheel, Drag, ContextMenu
 
     FUNC Text(content: String)
         Print("__SLASHER_HOST_CALL__ slasher_input.Text " + content)
+    END
+
+    FUNC Keys(keys: String)
+        Print("__SLASHER_HOST_CALL__ slasher_input.Keys " + keys)
+    END
+
+    FUNC Mouse(action: String, x: Int, y: Int, button: String)
+        Print("__SLASHER_HOST_CALL__ slasher_input.Mouse " + action + " " + ToString(x) + " " + ToString(y) + " " + button)
+    END
+
+    FUNC Wheel(x: Int, y: Int, delta: Int)
+        Print("__SLASHER_HOST_CALL__ slasher_input.Wheel " + ToString(x) + " " + ToString(y) + " " + ToString(delta))
+    END
+
+    FUNC Drag(fromX: Int, fromY: Int, toX: Int, toY: Int, button: String, durationMs: Int, steps: Int)
+        Print("__SLASHER_HOST_CALL__ slasher_input.Drag " + ToString(fromX) + " " + ToString(fromY) + " " + ToString(toX) + " " + ToString(toY) + " " + button + " " + ToString(durationMs) + " " + ToString(steps))
+    END
+
+    FUNC ContextMenu(x: Int, y: Int, delayMs: Int)
+        Print("__SLASHER_HOST_CALL__ slasher_input.ContextMenu " + ToString(x) + " " + ToString(y) + " " + ToString(delayMs))
     END
 END

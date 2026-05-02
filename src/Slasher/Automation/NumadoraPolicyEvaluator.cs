@@ -54,11 +54,11 @@ public sealed class NumadoraPolicyEvaluator
         }
 
         if (input.Capability.Module.Equals("slasher_input", StringComparison.OrdinalIgnoreCase)
-            && input.Capability.Function.Equals("Text", StringComparison.OrdinalIgnoreCase))
+            && IsApprovedInteractiveInputFunction(input.Capability.Function))
         {
             return HasApproval(input, "interactiveInput")
-                ? Allow("numadora_policy_allowed_interactive_input", "slasher_input.Text is allowed by explicit interactive input approval.")
-                : Deny("numadora_policy_interactive_input_not_approved", "Interactive text input requires explicit approval.");
+                ? Allow("numadora_policy_allowed_interactive_input", $"{input.Capability.Module}.{input.Capability.Function} is allowed by explicit interactive input approval.")
+                : Deny("numadora_policy_interactive_input_not_approved", "Interactive input requires explicit approval.");
         }
 
         return Deny("numadora_policy_profile_blocked", $"Profile '{input.Capability.Profile}' is not enabled for execution.");
@@ -85,6 +85,16 @@ public sealed class NumadoraPolicyEvaluator
     private static bool RequiresTargetIdentity(ScriptCapabilityRequirement capability)
     {
         return capability.CapabilityClass.Equals("User-input", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsApprovedInteractiveInputFunction(string function)
+    {
+        return function.Equals("Text", StringComparison.OrdinalIgnoreCase)
+            || function.Equals("Keys", StringComparison.OrdinalIgnoreCase)
+            || function.Equals("Mouse", StringComparison.OrdinalIgnoreCase)
+            || function.Equals("Wheel", StringComparison.OrdinalIgnoreCase)
+            || function.Equals("Drag", StringComparison.OrdinalIgnoreCase)
+            || function.Equals("ContextMenu", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasApproval(NumadoraPolicyInput input, string name)

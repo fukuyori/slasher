@@ -61,6 +61,9 @@ prototype can import directly:
 | app/process | `slasher_app` |
 | window | `slasher_window` |
 | input | `slasher_input` |
+| screen | `slasher_screen` |
+| element | `slasher_element` |
+| browser | `slasher_browser` |
 | logging/steps/wait | `slasher_io` |
 | assertions | `slasher_test` |
 
@@ -76,12 +79,33 @@ app.Start("notepad.exe")
 win.WaitForTitle("Notepad", 10000)
 win.Focus(handle)
 input.Text("hello")
+input.Keys("CTRL+S")
+input.Mouse("move", 400, 300, "left")
+input.Wheel(400, 300, 120)
+input.Drag(400, 300, 500, 350, "left", 400, 24)
+input.ContextMenu(400, 300, 250)
+screen.Capture("full", 1280, 720)
+element.Exists("foreground", "OK", "-", -1, "contains", 8, 1)
+element.Find("foreground", "OK", "-", -1, "contains", 8, 20)
+element.ReadText("foreground", "Status", "-", -1, "contains", 8, 1)
+element.Tree("foreground", 2, 50)
+browser.Current("-")
+browser.Title("-")
+browser.Url("-")
+browser.Locate("css", "body", 5000, "-")
+browser.DomText("css", "body", 5000, "-")
+browser.Attribute("css", "body", "class", 5000, "-")
+browser.Screenshot("-")
+browser.Links("-")
+browser.Windows("-")
 test.AssertForegroundTitle("contains", "Notepad")
 ```
 
-`input.Text(...)` is intentionally stricter in run mode than in check mode. It
-requires target identity and explicit `allowInteractiveInput` approval before
-Slasher sends text to the foreground application.
+`input.Text(...)`, `input.Keys(...)`, `input.Mouse(...)`, `input.Wheel(...)`,
+`input.Drag(...)`, and `input.ContextMenu(...)` are intentionally stricter in
+run mode than in check mode. They require target identity and explicit
+`allowInteractiveInput` approval before Slasher sends input to the foreground
+application.
 
 This is intentionally different from the v1 `.slasher` command style:
 
@@ -135,6 +159,10 @@ Examples:
 | `wait 800` | `io.Wait(800)` |
 | `text "hello"` | `input.Text("hello")` |
 | `keys CTRL+S` | `input.Keys("CTRL+S")` |
+| `mouse move 400 300` | `input.Mouse("move", 400, 300, "left")` |
+| `mouse wheel 400 300 120` | `input.Wheel(400, 300, 120)` |
+| `mouse drag 400 300 500 350 left 400 24` | `input.Drag(400, 300, 500, 350, "left", 400, 24)` |
+| `mouse context-menu 400 300 250` | `input.ContextMenu(400, 300, 250)` |
 | `foreground as win` | `LET win := win.Foreground()` once exposed |
 | `assert foreground title contains Notepad` | `test.AssertForegroundTitle("contains", "Notepad")` |
 

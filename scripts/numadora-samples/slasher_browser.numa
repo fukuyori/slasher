@@ -1,0 +1,39 @@
+MODULE slasher_browser
+    EXPORT Current, Title, Url, Locate, DomText, Attribute, Screenshot, Links, Windows
+
+    FUNC Current(sessionId: String)
+        Print("__SLASHER_HOST_CALL__ slasher_browser.Current " + sessionId)
+    END
+
+    FUNC Title(sessionId: String)
+        Print("__SLASHER_HOST_CALL__ slasher_browser.Title " + sessionId)
+    END
+
+    FUNC Url(sessionId: String)
+        Print("__SLASHER_HOST_CALL__ slasher_browser.Url " + sessionId)
+    END
+
+    FUNC Locate(usingValue: String, value: String, timeoutMs: Int, sessionId: String)
+        Print("__SLASHER_HOST_CALL__ slasher_browser.Locate " + usingValue + " " + value + " " + ToString(timeoutMs) + " " + sessionId)
+    END
+
+    FUNC DomText(usingValue: String, value: String, timeoutMs: Int, sessionId: String)
+        Print("__SLASHER_HOST_CALL__ slasher_browser.DomText " + usingValue + " " + value + " " + ToString(timeoutMs) + " " + sessionId)
+    END
+
+    FUNC Attribute(usingValue: String, value: String, attribute: String, timeoutMs: Int, sessionId: String)
+        Print("__SLASHER_HOST_CALL__ slasher_browser.Attribute " + usingValue + " " + value + " " + attribute + " " + ToString(timeoutMs) + " " + sessionId)
+    END
+
+    FUNC Screenshot(sessionId: String)
+        Print("__SLASHER_HOST_CALL__ slasher_browser.Screenshot " + sessionId)
+    END
+
+    FUNC Links(sessionId: String)
+        Print("__SLASHER_HOST_CALL__ slasher_browser.Links " + sessionId)
+    END
+
+    FUNC Windows(sessionId: String)
+        Print("__SLASHER_HOST_CALL__ slasher_browser.Windows " + sessionId)
+    END
+END

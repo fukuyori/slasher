@@ -413,6 +413,9 @@ public sealed class ScriptRunServiceTests : IDisposable
             IMPORT slasher_app AS app
             IMPORT slasher_window AS win
             IMPORT slasher_input AS input
+            IMPORT slasher_screen AS screen
+            IMPORT slasher_element AS element
+            IMPORT slasher_browser AS browser
             IMPORT slasher_io AS io
             IMPORT slasher_test AS test
 
@@ -422,6 +425,25 @@ public sealed class ScriptRunServiceTests : IDisposable
                 LET title := win.WaitForTitle("Notepad", 10000)
                 win.Focus(handle)
                 input.Text("hello")
+                input.Keys("CTRL+S")
+                input.Mouse("move", 1, 1, "left")
+                input.Wheel(1, 1, 120)
+                input.Drag(1, 1, 2, 2, "left", 1, 1)
+                input.ContextMenu(1, 1, 1)
+                screen.Capture("full", 320, 180)
+                element.Exists("foreground", "Notepad", "-", -1, "contains", 8, 1)
+                element.Find("foreground", "Notepad", "-", -1, "contains", 8, 20)
+                element.ReadText("foreground", "Notepad", "-", -1, "contains", 8, 1)
+                element.Tree("foreground", 2, 20)
+                browser.Current("-")
+                browser.Title("-")
+                browser.Url("-")
+                browser.Locate("css", "body", 5000, "-")
+                browser.DomText("css", "body", 5000, "-")
+                browser.Attribute("css", "body", "class", 5000, "-")
+                browser.Screenshot("-")
+                browser.Links("-")
+                browser.Windows("-")
                 test.AssertForegroundTitle("contains", title)
             END
             """);
@@ -442,6 +464,71 @@ public sealed class ScriptRunServiceTests : IDisposable
             && item.Function == "Text"
             && item.CapabilityClass == "User-input"
             && item.Profile == "interactive");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_input"
+            && item.Function == "Keys"
+            && item.CapabilityClass == "User-input"
+            && item.Profile == "interactive");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_input"
+            && item.Function == "Mouse"
+            && item.CapabilityClass == "User-input"
+            && item.Profile == "interactive");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_input"
+            && item.Function == "Wheel"
+            && item.CapabilityClass == "User-input"
+            && item.Profile == "interactive");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_input"
+            && item.Function == "Drag"
+            && item.CapabilityClass == "User-input"
+            && item.Profile == "interactive");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_input"
+            && item.Function == "ContextMenu"
+            && item.CapabilityClass == "User-input"
+            && item.Profile == "interactive");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_screen"
+            && item.Function == "Capture"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_element"
+            && item.Function == "Exists"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_element"
+            && item.Function == "Find"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_element"
+            && item.Function == "ReadText"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_element"
+            && item.Function == "Tree"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_browser"
+            && item.Function == "Current"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_browser"
+            && item.Function == "DomText"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_browser"
+            && item.Function == "Screenshot"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
         Assert.Contains(capabilities, item =>
             item.Module == "slasher_test"
             && item.Function == "AssertForegroundTitle"
@@ -660,6 +747,125 @@ public sealed class ScriptRunServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RunFileAsync_NumaInputKeysReachesPolicyGateAndFailsClosed()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "interactive-keys.numa"),
+            """
+            IMPORT slasher_input AS input
+
+            FUNC main()
+                input.Keys("CTRL+S")
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", "interactive-keys.numa"),
+            Name: "unit-numadora-interactive-keys-preflight",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false)),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
+        Assert.Equal("numadora_policy_denied", response.Error?.Code);
+        Assert.Equal(Path.Combine("scripts", "interactive-keys.numa"), response.Run.EntryPoint);
+        Assert.Equal(2, response.Events.Count);
+        var hostCallEvent = response.Events[1];
+        Assert.Equal("numadora.hostCall", hostCallEvent.Action);
+        Assert.False(hostCallEvent.Ok);
+        Assert.Equal("slasher_input", hostCallEvent.Parameters["module"]);
+        Assert.Equal("Keys", hostCallEvent.Parameters["function"]);
+        Assert.Equal("slasher-policy", hostCallEvent.Parameters["executedBy"]);
+        var policyInput = Assert.IsType<NumadoraPolicyInput>(hostCallEvent.Parameters["policyInput"]);
+        Assert.NotNull(policyInput.Approvals);
+        Assert.False(Assert.IsType<bool>(policyInput.Approvals!["interactiveInput"]));
+        var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
+        Assert.False(policyDecision.Allow);
+        Assert.Equal("numadora_policy_interactive_input_not_approved", policyDecision.Code);
+    }
+
+    [Fact]
+    public async Task RunFileAsync_NumaInputMouseReachesPolicyGateAndFailsClosed()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "interactive-mouse.numa"),
+            """
+            IMPORT slasher_input AS input
+
+            FUNC main()
+                input.Mouse("move", 1, 1, "left")
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", "interactive-mouse.numa"),
+            Name: "unit-numadora-interactive-mouse-preflight",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false)),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
+        Assert.Equal("numadora_policy_denied", response.Error?.Code);
+        Assert.Equal(Path.Combine("scripts", "interactive-mouse.numa"), response.Run.EntryPoint);
+        Assert.Equal(2, response.Events.Count);
+        var hostCallEvent = response.Events[1];
+        Assert.Equal("numadora.hostCall", hostCallEvent.Action);
+        Assert.False(hostCallEvent.Ok);
+        Assert.Equal("slasher_input", hostCallEvent.Parameters["module"]);
+        Assert.Equal("Mouse", hostCallEvent.Parameters["function"]);
+        Assert.Equal("slasher-policy", hostCallEvent.Parameters["executedBy"]);
+        var policyInput = Assert.IsType<NumadoraPolicyInput>(hostCallEvent.Parameters["policyInput"]);
+        Assert.NotNull(policyInput.Approvals);
+        Assert.False(Assert.IsType<bool>(policyInput.Approvals!["interactiveInput"]));
+        var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
+        Assert.False(policyDecision.Allow);
+        Assert.Equal("numadora_policy_interactive_input_not_approved", policyDecision.Code);
+    }
+
+    [Theory]
+    [InlineData("Wheel", """input.Wheel(1, 1, 120)""")]
+    [InlineData("Drag", """input.Drag(1, 1, 2, 2, "left", 1, 1)""")]
+    [InlineData("ContextMenu", "input.ContextMenu(1, 1, 1)")]
+    public async Task RunFileAsync_NumaMouseVariantsReachPolicyGateAndFailClosed(string function, string call)
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, $"interactive-{function.ToLowerInvariant()}.numa"),
+            $$"""
+            IMPORT slasher_input AS input
+
+            FUNC main()
+                {{call}}
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", $"interactive-{function.ToLowerInvariant()}.numa"),
+            Name: $"unit-numadora-interactive-{function.ToLowerInvariant()}-preflight",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false)),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
+        Assert.Equal("numadora_policy_denied", response.Error?.Code);
+        Assert.Equal(2, response.Events.Count);
+        var hostCallEvent = response.Events[1];
+        Assert.Equal("numadora.hostCall", hostCallEvent.Action);
+        Assert.False(hostCallEvent.Ok);
+        Assert.Equal("slasher_input", hostCallEvent.Parameters["module"]);
+        Assert.Equal(function, hostCallEvent.Parameters["function"]);
+        Assert.Equal("slasher-policy", hostCallEvent.Parameters["executedBy"]);
+        var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
+        Assert.False(policyDecision.Allow);
+        Assert.Equal("numadora_policy_interactive_input_not_approved", policyDecision.Code);
+    }
+
+    [Fact]
     public async Task RunFileAsync_NumaObserveHostCallExecutesThroughSlasherPolicy()
     {
         var scripts = Path.Combine(_workspaceRoot, "scripts");
@@ -691,6 +897,121 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.Equal("slasher_window", hostCallEvent.Parameters["module"]);
         Assert.Equal("WaitForTitle", hostCallEvent.Parameters["function"]);
         Assert.Equal("slasher-window", hostCallEvent.Parameters["executedBy"]);
+        var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
+        Assert.True(policyDecision.Allow);
+        Assert.Equal("numadora_policy_allowed_observe", policyDecision.Code);
+    }
+
+    [Fact]
+    public async Task RunFileAsync_NumaScreenCaptureRejectsInvalidScopeBeforeCapture()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "invalid-screen-capture.numa"),
+            """
+            IMPORT slasher_screen AS screen
+
+            FUNC main()
+                screen.Capture("bad-scope", 320, 180)
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", "invalid-screen-capture.numa"),
+            Name: "unit-numadora-screen-capture-invalid-scope",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false)),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
+        Assert.Equal("numadora_host_call_invalid_arguments", response.Error?.Code);
+        Assert.Equal(2, response.Events.Count);
+        var hostCallEvent = response.Events[1];
+        Assert.Equal("numadora.hostCall", hostCallEvent.Action);
+        Assert.False(hostCallEvent.Ok);
+        Assert.Equal("slasher_screen", hostCallEvent.Parameters["module"]);
+        Assert.Equal("Capture", hostCallEvent.Parameters["function"]);
+        Assert.Equal("slasher-screen", hostCallEvent.Parameters["executedBy"]);
+        var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
+        Assert.True(policyDecision.Allow);
+        Assert.Equal("numadora_policy_allowed_observe", policyDecision.Code);
+    }
+
+    [Theory]
+    [InlineData("Exists", """element.Exists("foreground", "Title", "-", -1, "bad-match", 8, 1)""")]
+    [InlineData("Find", """element.Find("foreground", "-", "-", -1, "contains", 8, 20)""")]
+    [InlineData("ReadText", """element.ReadText("foreground", "Title", "-", -1, "bad-match", 8, 1)""")]
+    [InlineData("Tree", """element.Tree("foreground", -1, 20)""")]
+    public async Task RunFileAsync_NumaElementObserveCallsReachPolicyGateAndRejectInvalidArguments(string function, string call)
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, $"invalid-element-{function.ToLowerInvariant()}.numa"),
+            $$"""
+            IMPORT slasher_element AS element
+
+            FUNC main()
+                {{call}}
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", $"invalid-element-{function.ToLowerInvariant()}.numa"),
+            Name: $"unit-numadora-element-{function.ToLowerInvariant()}-invalid-args",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false)),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
+        Assert.Equal("numadora_host_call_invalid_arguments", response.Error?.Code);
+        Assert.Equal(2, response.Events.Count);
+        var hostCallEvent = response.Events[1];
+        Assert.Equal("numadora.hostCall", hostCallEvent.Action);
+        Assert.False(hostCallEvent.Ok);
+        Assert.Equal("slasher_element", hostCallEvent.Parameters["module"]);
+        Assert.Equal(function, hostCallEvent.Parameters["function"]);
+        Assert.Equal("slasher-element", hostCallEvent.Parameters["executedBy"]);
+        var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
+        Assert.True(policyDecision.Allow);
+        Assert.Equal("numadora_policy_allowed_observe", policyDecision.Code);
+    }
+
+    [Theory]
+    [InlineData("Locate", """browser.Locate("css", "body", 0, "-")""")]
+    [InlineData("DomText", """browser.DomText("css", "body", 0, "-")""")]
+    [InlineData("Attribute", """browser.Attribute("css", "body", "class", 0, "-")""")]
+    public async Task RunFileAsync_NumaBrowserObserveCallsReachPolicyGateAndRejectInvalidArguments(string function, string call)
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, $"invalid-browser-{function.ToLowerInvariant()}.numa"),
+            $$"""
+            IMPORT slasher_browser AS browser
+
+            FUNC main()
+                {{call}}
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", $"invalid-browser-{function.ToLowerInvariant()}.numa"),
+            Name: $"unit-numadora-browser-{function.ToLowerInvariant()}-invalid-args",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false)),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
+        Assert.Equal("numadora_host_call_invalid_arguments", response.Error?.Code);
+        Assert.Equal(2, response.Events.Count);
+        var hostCallEvent = response.Events[1];
+        Assert.Equal("numadora.hostCall", hostCallEvent.Action);
+        Assert.False(hostCallEvent.Ok);
+        Assert.Equal("slasher_browser", hostCallEvent.Parameters["module"]);
+        Assert.Equal(function, hostCallEvent.Parameters["function"]);
+        Assert.Equal("slasher-browser", hostCallEvent.Parameters["executedBy"]);
         var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
         Assert.True(policyDecision.Allow);
         Assert.Equal("numadora_policy_allowed_observe", policyDecision.Code);
@@ -837,10 +1158,104 @@ public sealed class ScriptRunServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(directory, "slasher_input.numa"),
             """
             MODULE slasher_input
-                EXPORT Text
+                EXPORT Text, Keys, Mouse, Wheel, Drag, ContextMenu
 
                 FUNC Text(content: String)
                     Print("__SLASHER_HOST_CALL__ slasher_input.Text " + content)
+                END
+
+                FUNC Keys(keys: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_input.Keys " + keys)
+                END
+
+                FUNC Mouse(action: String, x: Int, y: Int, button: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_input.Mouse " + action + " " + ToString(x) + " " + ToString(y) + " " + button)
+                END
+
+                FUNC Wheel(x: Int, y: Int, delta: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_input.Wheel " + ToString(x) + " " + ToString(y) + " " + ToString(delta))
+                END
+
+                FUNC Drag(fromX: Int, fromY: Int, toX: Int, toY: Int, button: String, durationMs: Int, steps: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_input.Drag " + ToString(fromX) + " " + ToString(fromY) + " " + ToString(toX) + " " + ToString(toY) + " " + button + " " + ToString(durationMs) + " " + ToString(steps))
+                END
+
+                FUNC ContextMenu(x: Int, y: Int, delayMs: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_input.ContextMenu " + ToString(x) + " " + ToString(y) + " " + ToString(delayMs))
+                END
+            END
+            """);
+        await File.WriteAllTextAsync(Path.Combine(directory, "slasher_screen.numa"),
+            """
+            MODULE slasher_screen
+                EXPORT Capture
+
+                FUNC Capture(scope: String, maxWidth: Int, maxHeight: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_screen.Capture " + scope + " " + ToString(maxWidth) + " " + ToString(maxHeight))
+                END
+            END
+            """);
+        await File.WriteAllTextAsync(Path.Combine(directory, "slasher_element.numa"),
+            """
+            MODULE slasher_element
+                EXPORT Find, Exists, ReadText, Tree
+
+                FUNC Find(scope: String, title: String, className: String, controlId: Int, match: String, maxDepth: Int, maxResults: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_element.Find " + scope + " " + title + " " + className + " " + ToString(controlId) + " " + match + " " + ToString(maxDepth) + " " + ToString(maxResults))
+                END
+
+                FUNC Exists(scope: String, title: String, className: String, controlId: Int, match: String, maxDepth: Int, maxResults: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_element.Exists " + scope + " " + title + " " + className + " " + ToString(controlId) + " " + match + " " + ToString(maxDepth) + " " + ToString(maxResults))
+                END
+
+                FUNC ReadText(scope: String, title: String, className: String, controlId: Int, match: String, maxDepth: Int, maxResults: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_element.ReadText " + scope + " " + title + " " + className + " " + ToString(controlId) + " " + match + " " + ToString(maxDepth) + " " + ToString(maxResults))
+                END
+
+                FUNC Tree(scope: String, maxDepth: Int, maxChildren: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_element.Tree " + scope + " " + ToString(maxDepth) + " " + ToString(maxChildren))
+                END
+            END
+            """);
+        await File.WriteAllTextAsync(Path.Combine(directory, "slasher_browser.numa"),
+            """
+            MODULE slasher_browser
+                EXPORT Current, Title, Url, Locate, DomText, Attribute, Screenshot, Links, Windows
+
+                FUNC Current(sessionId: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_browser.Current " + sessionId)
+                END
+
+                FUNC Title(sessionId: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_browser.Title " + sessionId)
+                END
+
+                FUNC Url(sessionId: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_browser.Url " + sessionId)
+                END
+
+                FUNC Locate(usingValue: String, value: String, timeoutMs: Int, sessionId: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_browser.Locate " + usingValue + " " + value + " " + ToString(timeoutMs) + " " + sessionId)
+                END
+
+                FUNC DomText(usingValue: String, value: String, timeoutMs: Int, sessionId: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_browser.DomText " + usingValue + " " + value + " " + ToString(timeoutMs) + " " + sessionId)
+                END
+
+                FUNC Attribute(usingValue: String, value: String, attribute: String, timeoutMs: Int, sessionId: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_browser.Attribute " + usingValue + " " + value + " " + attribute + " " + ToString(timeoutMs) + " " + sessionId)
+                END
+
+                FUNC Screenshot(sessionId: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_browser.Screenshot " + sessionId)
+                END
+
+                FUNC Links(sessionId: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_browser.Links " + sessionId)
+                END
+
+                FUNC Windows(sessionId: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_browser.Windows " + sessionId)
                 END
             END
             """);

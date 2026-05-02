@@ -85,6 +85,9 @@ scripts/
     slasher_app.numa
     slasher_window.numa
     slasher_input.numa
+    slasher_screen.numa
+    slasher_element.numa
+    slasher_browser.numa
     slasher_io.numa
     slasher_test.numa
 ```
@@ -180,14 +183,29 @@ Current implementation status:
   when available, and execution results
 - policy-enabled host calls currently include `slasher_io` observations,
   `slasher_window.WaitForTitle`, `slasher_test.AssertForegroundTitle`,
-  `slasher_app.Start`, and `slasher_window.Focus`
-- `slasher_input.Text` requires target identity and explicit
-  `allowInteractiveInput` approval. Without that approval, it fails closed as a
-  policy-denied `numadora.hostCall` event without sending text
-- scripts requiring browser, file, clipboard, or other non-enabled host-call
-  bindings create normal failed run artifacts with `numadora_run_not_implemented`
+  `slasher_app.Start`, `slasher_window.Focus`, `slasher_input.Text`, and
+  `slasher_input.Keys`, `slasher_input.Mouse`, `slasher_input.Wheel`, and
+  `slasher_input.Drag`, `slasher_input.ContextMenu`, and
+  `slasher_screen.Capture`, plus the observe-only `slasher_element.Find`,
+  `slasher_element.Exists`, `slasher_element.ReadText`, and
+  `slasher_element.Tree`, and the observe-only `slasher_browser.Current`,
+  `slasher_browser.Title`, `slasher_browser.Url`, `slasher_browser.Locate`,
+  `slasher_browser.DomText`, `slasher_browser.Attribute`,
+  `slasher_browser.Screenshot`, `slasher_browser.Links`, and
+  `slasher_browser.Windows`
+- `slasher_input.Text`, `slasher_input.Keys`, `slasher_input.Mouse`,
+  `slasher_input.Wheel`, `slasher_input.Drag`, and
+  `slasher_input.ContextMenu` require target identity and explicit
+  `allowInteractiveInput` approval. Without that approval, they fail closed as
+  policy-denied `numadora.hostCall` events without sending input. With approval,
+  Slasher revalidates the foreground target before sending input and fails
+  closed if the target changed.
+- scripts requiring browser mutation/data APIs, file, clipboard, or other
+  non-enabled host-call bindings create normal failed run artifacts with
+  `numadora_run_not_implemented`
 - host-call blocked failures include `requiredCapabilities`,
-  `blockedCapabilities`, `allowedLocalModules`, and `runMode` in error details
+  `blockedCapabilities`, `allowedLocalModules`, `allowedLocalHostCalls`, and
+  `runMode` in error details
 - host-call blocked failures may also include a `hostCalls` trace captured from
   Slasher-owned safe stub modules; this is diagnostic only and does not execute
   GUI actions
@@ -198,8 +216,8 @@ Current implementation status:
   `policyDecisions` values from the in-process evaluator
 - invalid `.numa` scripts create normal failed run artifacts with
   `numadora_check_failed`
-- browser, file, clipboard, and non-enabled host-call actions are not executed
-  by this run path
+- browser mutation/data APIs, file, clipboard, and non-enabled host-call
+  actions are not executed by this run path
 
 Input:
 

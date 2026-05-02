@@ -230,23 +230,37 @@ pure Numadora scripts, or scripts limited to the temporary `slasher_io` stub
 surface, through the local Numadora CLI and capture stdout/stderr as Slasher
 logs. Structured stub output is parsed into event `hostCalls` and
 `numadora.hostCall` log entries, and each observed safe host call is appended
-as a `numadora.hostCall` timeline event. Scripts that require process, window,
-input, browser, file, clipboard, or other host-call bindings still fail with
+as a `numadora.hostCall` timeline event. Policy-gated local host execution now
+covers `slasher_io.*`, `slasher_screen.Capture`, observe-only
+`slasher_element.Find`, `slasher_element.Exists`, `slasher_element.ReadText`,
+`slasher_element.Tree`, observe-only `slasher_browser.Current`,
+`slasher_browser.Title`, `slasher_browser.Url`, `slasher_browser.Locate`,
+`slasher_browser.DomText`, `slasher_browser.Attribute`,
+`slasher_browser.Screenshot`, `slasher_browser.Links`,
+`slasher_browser.Windows`, `slasher_window.WaitForTitle`,
+`slasher_test.AssertForegroundTitle`, `slasher_app.Start`,
+`slasher_window.Focus`, opt-in `slasher_input.Text`, and opt-in
+`slasher_input.Keys`, opt-in `slasher_input.Mouse`, opt-in
+`slasher_input.Wheel`, opt-in `slasher_input.Drag`, and opt-in
+`slasher_input.ContextMenu`. Scripts that require browser mutation/data APIs,
+file, clipboard, or other non-enabled host-call bindings still fail with
 `numadora_run_not_implemented`.
 Invalid scripts fail with `numadora_check_failed` before any GUI action can run.
 MCP run tools and the Web UI script runner pass the same `language` selector.
 Blocked host-call runs include `blockedCapabilities`, `allowedLocalModules`,
-and `runMode` details so the next host bridge can attach policy decisions
-without changing the outer run artifact shape. MCP run summaries and the Web
-UI diagnostics panel surface both the blocked capability list and the
-diagnostic `hostCalls` trace. The current blocked path also runs the safe
-Numadora stub modules to capture that trace; it records call order and
+`allowedLocalHostCalls`, and `runMode` details so the next host bridge can
+attach policy decisions without changing the outer run artifact shape. MCP run
+summaries and the Web UI diagnostics panel surface both the blocked capability
+list and the diagnostic `hostCalls` trace. The current blocked path also runs
+the safe Numadora stub modules to capture that trace; it records call order and
 arguments but still does not execute GUI actions.
 Current runs also carry the first lineage/policy artifacts from
 `numadora-lineage-policy-plan.md`: optional `purpose`, script SHA-256 lineage
 metadata, per-host-call `policyInput` objects, and diagnostic
-`policyDecision` results from the in-process evaluator. These are recorded for
-inspection only; real GUI/input host-call execution is still a future step.
+`policyDecision` results from the in-process evaluator. Real local host calls
+execute only after the in-process evaluator allows them. Text/key/mouse input also
+requires explicit `allowInteractiveInput` approval and foreground target
+revalidation.
 
 First scenario:
 
@@ -401,10 +415,10 @@ window/input, assertions, artifacts, element checks, and browser checks.
 | Check diagnostics | implemented | Numadora diagnostics | yes |
 | Variables | dynamic scopes | `LET` / `VAR` | yes |
 | Includes/modules | `include` | `IMPORT` / modules | yes |
-| Window/input basics | implemented | `slasher_window`, `slasher_input` | yes |
+| Window/input/screen/element/browser observe basics | implemented | `slasher_window`, `slasher_input`, `slasher_screen`, `slasher_element`, `slasher_browser` | yes |
 | Assertions | implemented | `slasher_test` | yes |
-| Browser automation | implemented | `slasher_browser` | before browser test migration |
-| Element automation | implemented | `slasher_element` | before native UI test migration |
+| Browser mutation/data automation | implemented | `slasher_browser` | before browser test migration |
+| Element input automation | implemented | `slasher_element` | before native UI test migration |
 | Data packages | Phase 12 | `slasher_csv`, `slasher_json`, `slasher_excel` | package-specific |
 | Porting tooling | none | optional `slasher migrate` | no |
 | Build/exe | not active | later | no |

@@ -193,6 +193,14 @@ stable.
 - [x] Numadora text input host call reaches policy-denied event path
 - [x] Explicit Numadora interactive input approval flag
 - [x] Web UI and MCP opt-in for Numadora interactive input approval
+- [x] Target-revalidated Numadora text input bridge
+- [x] Target-revalidated Numadora key input bridge
+- [x] Target-revalidated Numadora basic mouse input bridge
+- [x] Target-revalidated Numadora wheel and drag input bridge
+- [x] Target-revalidated Numadora context-menu input bridge
+- [x] Numadora screen capture observe bridge
+- [x] Numadora native element observe bridges
+- [x] Numadora browser observe bridges
 - [ ] `.numa` check/run support
 - [ ] Security policy gates for Numadora host bindings
 - [ ] Important `.slasher` samples ported to `.numa`

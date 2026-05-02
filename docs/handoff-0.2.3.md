@@ -1,9 +1,9 @@
-# Slasher 0.2.2 Handoff
+# Slasher 0.2.3 Handoff
 
 Last confirmed commit:
 
 ```text
-d02fec4 0.2.0
+4dd8590 0.2.2
 ```
 
 Working tree was clean after the commit.
@@ -145,17 +145,57 @@ Implemented after the `d02fec4 0.2.0` commit:
   reports `app_start_failed` for a missing executable without launching an app.
 - `NumadoraPolicyInput` now carries the current foreground target identity when
   Slasher can observe it. `User-input` host calls deny with
-  `numadora_policy_missing_target` when no target identity is available, and
-  text input remains disabled even when a target exists.
+  `numadora_policy_missing_target` when no target identity is available.
 - `slasher_window.Focus` now derives target identity from its explicit handle
   argument, passes policy as `numadora_policy_allowed_window_focus`, and reaches
   Slasher's focus path. The test uses a missing handle and verifies a normal
   `window_not_found` error without focusing a real app.
 - `slasher_input.Text` now reaches the same `numadora.hostCall` policy event
-  path and fails closed without explicit approval. `allowInteractiveInput` is
-  now available on script run requests, MCP run tools, and the Web UI's
-  Numadora-only input checkbox. The checkbox is off by default. The evaluator
-  only allows text input when a target identity exists and this approval is true.
+  path. `allowInteractiveInput` is now available on script run requests, MCP
+  run tools, and the Web UI's Numadora-only input checkbox. The checkbox is off
+  by default. The evaluator only allows input when a target identity exists
+  and this approval is true.
+
+Implemented for 0.2.3 after the `4dd8590 0.2.2` commit:
+
+- `slasher_input.Text` revalidates the foreground target immediately before
+  sending text and fails with `numadora_policy_target_changed` if the target no
+  longer matches the policy input.
+- `slasher_input.Keys` now uses the same target-bound,
+  `allowInteractiveInput`-approved policy path as `slasher_input.Text`.
+- `slasher_input.Mouse` now uses the same target-bound,
+  `allowInteractiveInput`-approved policy path for basic mouse actions.
+- `slasher_input.Wheel` and `slasher_input.Drag` now use the same target-bound,
+  `allowInteractiveInput`-approved policy path.
+- `slasher_input.ContextMenu` now uses the same target-bound,
+  `allowInteractiveInput`-approved policy path and records screenshot metadata
+  without embedding screenshot bytes in event results.
+- `slasher_screen.Capture` now runs as an `Observe` host call and stores the
+  screenshot as normal run evidence while keeping image bytes out of event
+  result payloads.
+- `slasher_element.Find`, `slasher_element.Exists`,
+  `slasher_element.ReadText`, and `slasher_element.Tree` now run as
+  observe-only host calls. `slasher_element.Click` remains intentionally
+  unbridged because it is input.
+- Observe-only browser calls now run through the same policy envelope:
+  `slasher_browser.Current`, `slasher_browser.Title`, `slasher_browser.Url`,
+  `slasher_browser.Locate`, `slasher_browser.DomText`,
+  `slasher_browser.Attribute`, `slasher_browser.Screenshot`,
+  `slasher_browser.Links`, and `slasher_browser.Windows`.
+- Set Slasher version metadata and MCP/README version surfaces to `0.2.3`.
+- Blocked-host-call diagnostics now list the current local bridge set:
+  `slasher_app.Start`, `slasher_window.Focus`,
+  `slasher_window.WaitForTitle`, `slasher_input.Text`,
+  `slasher_input.Keys`, `slasher_input.Mouse`, `slasher_input.Wheel`,
+  `slasher_input.Drag`, `slasher_input.ContextMenu`,
+  `slasher_screen.Capture`, `slasher_element.Find`,
+  `slasher_element.Exists`, `slasher_element.ReadText`,
+  `slasher_element.Tree`, `slasher_browser.Current`,
+  `slasher_browser.Title`, `slasher_browser.Url`,
+  `slasher_browser.Locate`, `slasher_browser.DomText`,
+  `slasher_browser.Attribute`, `slasher_browser.Screenshot`,
+  `slasher_browser.Links`, `slasher_browser.Windows`, `slasher_io.*`, and
+  `slasher_test.AssertForegroundTitle`.
 - The v1 `.slasher` check path remains unchanged.
 
 N1 goal:
@@ -163,14 +203,17 @@ N1 goal:
 - Keep replacing the current `.numa` stub-module trace with policy-gated
   Slasher host execution while preserving the same Numadora-facing function
   signatures.
-- Next risky bridge target is exposing actual `slasher_input.Text` execution in
-  broader flows. Keep it opt-in and target-bound; do not make it a default.
+- Next risky bridge target is the next non-input module group such as
+  `slasher_screen`, `slasher_element`, or `slasher_browser`.
 
 Start with these modules:
 
 - `slasher_app`
 - `slasher_window`
 - `slasher_input`
+- `slasher_screen`
+- `slasher_element`
+- `slasher_browser`
 - `slasher_io`
 - `slasher_test`
 

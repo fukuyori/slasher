@@ -1,0 +1,7 @@
+MODULE slasher_screen
+    EXPORT Capture
+
+    FUNC Capture(scope: String, maxWidth: Int, maxHeight: Int)
+        Print("__SLASHER_HOST_CALL__ slasher_screen.Capture " + scope + " " + ToString(maxWidth) + " " + ToString(maxHeight))
+    END
+END

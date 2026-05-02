@@ -169,9 +169,20 @@ Already implemented groundwork:
   `numadora_policy_missing_target` when no target identity is available.
 - `slasher_window.Focus` now derives target identity from the host-call handle
   argument and executes through Slasher after policy allow.
-- `slasher_input.Text` now reaches the same host-call policy event path, but
-  still fails closed without explicit `allowInteractiveInput` approval; no text
-  is sent by default.
+- `slasher_input.Text`, `slasher_input.Keys`, `slasher_input.Mouse`,
+  `slasher_input.Wheel`, `slasher_input.Drag`, and
+  `slasher_input.ContextMenu` now reach the same host-call policy event path.
+  They fail closed without explicit `allowInteractiveInput` approval, and when
+  approved they revalidate the foreground target immediately before sending
+  input.
+- `slasher_screen.Capture` now runs as an `Observe` call and stores screenshot
+  bytes only as normal run evidence, not in event result payloads.
+- Observe-only element calls now run through the same policy envelope:
+  `slasher_element.Find`, `slasher_element.Exists`,
+  `slasher_element.ReadText`, and `slasher_element.Tree`.
+- Observe-only browser calls now run through the same policy envelope, while
+  browser mutation, cookies, storage, and JavaScript execution remain outside
+  the local bridge.
 
 Bridge steps completed so far:
 
@@ -194,11 +205,26 @@ Bridge steps completed so far:
     approval is true.
 12. Expose the approval as an off-by-default Numadora-only checkbox in the Web
     UI and as an explicit MCP/tool request field.
+13. Revalidate the target identity immediately before sending approved
+    `slasher_input.Text`.
+14. Extend the same target-bound approval path to `slasher_input.Keys`.
+15. Extend the same target-bound approval path to `slasher_input.Mouse`.
+16. Extend the same target-bound approval path to `slasher_input.Wheel` and
+    `slasher_input.Drag`.
+17. Extend the same target-bound approval path to
+    `slasher_input.ContextMenu` while keeping screenshot payloads out of event
+    results.
+18. Add `slasher_screen.Capture` as the first screen observation bridge with
+    screenshot bytes stored as evidence.
+19. Add observe-only `slasher_element` bridges and keep element input such as
+    click outside the local bridge.
+20. Add observe-only `slasher_browser` bridges and keep browser mutation/data
+    APIs outside the local bridge.
 
 Next bridge step:
 
-- Extend the same policy envelope to input and focus calls after target
-  metadata and approval rules are explicit.
+- Extend the same policy envelope to file-read/data package observation before
+  enabling write or destructive actions.
 
 ## Phased Plan
 
@@ -246,8 +272,13 @@ host-call bridge remains disabled.
   without sending input.
 - [x] Add explicit `allowInteractiveInput` approval for text input policy.
 - [x] Expose interactive input approval in MCP and Web UI as an explicit opt-in.
-- [ ] Bridge text input in normal UI flows only after selected or foreground
+- [x] Bridge text input in normal UI flows only after selected or foreground
   target identity is explicit and policy-approved.
+- [x] Revalidate the foreground target before sending approved text input.
+- [x] Extend the same target-bound approval pattern to key chords.
+- [x] Extend the same target-bound approval pattern to basic mouse input.
+- [x] Extend the same pattern to drag and wheel variants.
+- [x] Extend the same pattern to context-menu variants.
 
 ### L4: External Policy Adapter
 

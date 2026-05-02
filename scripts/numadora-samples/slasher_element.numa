@@ -1,0 +1,19 @@
+MODULE slasher_element
+    EXPORT Find, Exists, ReadText, Tree
+
+    FUNC Find(scope: String, title: String, className: String, controlId: Int, match: String, maxDepth: Int, maxResults: Int)
+        Print("__SLASHER_HOST_CALL__ slasher_element.Find " + scope + " " + title + " " + className + " " + ToString(controlId) + " " + match + " " + ToString(maxDepth) + " " + ToString(maxResults))
+    END
+
+    FUNC Exists(scope: String, title: String, className: String, controlId: Int, match: String, maxDepth: Int, maxResults: Int)
+        Print("__SLASHER_HOST_CALL__ slasher_element.Exists " + scope + " " + title + " " + className + " " + ToString(controlId) + " " + match + " " + ToString(maxDepth) + " " + ToString(maxResults))
+    END
+
+    FUNC ReadText(scope: String, title: String, className: String, controlId: Int, match: String, maxDepth: Int, maxResults: Int)
+        Print("__SLASHER_HOST_CALL__ slasher_element.ReadText " + scope + " " + title + " " + className + " " + ToString(controlId) + " " + match + " " + ToString(maxDepth) + " " + ToString(maxResults))
+    END
+
+    FUNC Tree(scope: String, maxDepth: Int, maxChildren: Int)
+        Print("__SLASHER_HOST_CALL__ slasher_element.Tree " + scope + " " + ToString(maxDepth) + " " + ToString(maxChildren))
+    END
+END

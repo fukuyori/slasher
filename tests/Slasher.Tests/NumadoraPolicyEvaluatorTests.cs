@@ -105,6 +105,57 @@ public sealed class NumadoraPolicyEvaluatorTests
     }
 
     [Fact]
+    public void Evaluate_AllowsInteractiveKeysWithExplicitApprovalAndTarget()
+    {
+        var decision = _evaluator.Evaluate(
+            CreateInput(
+                Capability("slasher_input", "Keys", "User-input", "interactive"),
+                target: new AutomationTarget("window", Handle: "0x1", Title: "target"),
+                approvals: new Dictionary<string, object?>
+                {
+                    ["interactiveInput"] = true,
+                }));
+
+        Assert.True(decision.Allow);
+        Assert.Equal("numadora_policy_allowed_interactive_input", decision.Code);
+    }
+
+    [Fact]
+    public void Evaluate_AllowsInteractiveMouseWithExplicitApprovalAndTarget()
+    {
+        var decision = _evaluator.Evaluate(
+            CreateInput(
+                Capability("slasher_input", "Mouse", "User-input", "interactive"),
+                target: new AutomationTarget("window", Handle: "0x1", Title: "target"),
+                approvals: new Dictionary<string, object?>
+                {
+                    ["interactiveInput"] = true,
+                }));
+
+        Assert.True(decision.Allow);
+        Assert.Equal("numadora_policy_allowed_interactive_input", decision.Code);
+    }
+
+    [Theory]
+    [InlineData("Wheel")]
+    [InlineData("Drag")]
+    [InlineData("ContextMenu")]
+    public void Evaluate_AllowsInteractiveMouseVariantsWithExplicitApprovalAndTarget(string function)
+    {
+        var decision = _evaluator.Evaluate(
+            CreateInput(
+                Capability("slasher_input", function, "User-input", "interactive"),
+                target: new AutomationTarget("window", Handle: "0x1", Title: "target"),
+                approvals: new Dictionary<string, object?>
+                {
+                    ["interactiveInput"] = true,
+                }));
+
+        Assert.True(decision.Allow);
+        Assert.Equal("numadora_policy_allowed_interactive_input", decision.Code);
+    }
+
+    [Fact]
     public void Evaluate_AllowsAppStartWithProcessAuditPolicy()
     {
         var decision = _evaluator.Evaluate(

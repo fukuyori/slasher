@@ -849,7 +849,7 @@ async function handleMessage(message) {
         },
         serverInfo: {
           name: "slasher-mcp",
-          version: "0.2.2"
+          version: "0.2.3"
         }
       });
       return;

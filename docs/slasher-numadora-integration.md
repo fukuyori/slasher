@@ -48,7 +48,10 @@ by the current Numadora prototype:
 |---|---|---|
 | `slasher_app` | application process control | `Start(fileName)` |
 | `slasher_window` | window lookup and focus | `WaitForTitle(title, timeoutMs)`, `Focus(handle)` |
-| `slasher_input` | keyboard and mouse input | `Text(content)` |
+| `slasher_input` | keyboard and mouse input | `Text(content)`, `Keys(keys)`, `Mouse(action, x, y, button)`, `Wheel(x, y, delta)`, `Drag(fromX, fromY, toX, toY, button, durationMs, steps)`, `ContextMenu(x, y, delayMs)` |
+| `slasher_screen` | screenshots and visual observations | `Capture(scope, maxWidth, maxHeight)` |
+| `slasher_element` | native element observation | `Find(scope, title, className, controlId, match, maxDepth, maxResults)`, `Exists(...)`, `ReadText(...)`, `Tree(scope, maxDepth, maxChildren)` |
+| `slasher_browser` | browser observation | `Current(sessionId)`, `Title(sessionId)`, `Url(sessionId)`, `Locate(using, value, timeoutMs, sessionId)`, `DomText(...)`, `Attribute(...)`, `Screenshot(sessionId)`, `Links(sessionId)`, `Windows(sessionId)` |
 | `slasher_io` | run log and step markers | `Step(name)`, `Log(message)`, `Wait(ms)` |
 | `slasher_test` | assertions | `AssertForegroundTitle(operator, expected)` |
 
@@ -69,6 +72,25 @@ catalog maps known Numadora-facing calls to the security classes in
 | `slasher_window` | `WaitForTitle` | Observe | `observe` |
 | `slasher_window` | `Focus` | User-input | `interactive` |
 | `slasher_input` | `Text` | User-input | `interactive` |
+| `slasher_input` | `Keys` | User-input | `interactive` |
+| `slasher_input` | `Mouse` | User-input | `interactive` |
+| `slasher_input` | `Wheel` | User-input | `interactive` |
+| `slasher_input` | `Drag` | User-input | `interactive` |
+| `slasher_input` | `ContextMenu` | User-input | `interactive` |
+| `slasher_screen` | `Capture` | Observe | `observe` |
+| `slasher_element` | `Find` | Observe | `observe` |
+| `slasher_element` | `Exists` | Observe | `observe` |
+| `slasher_element` | `ReadText` | Observe | `observe` |
+| `slasher_element` | `Tree` | Observe | `observe` |
+| `slasher_browser` | `Current` | Observe | `observe` |
+| `slasher_browser` | `Title` | Observe | `observe` |
+| `slasher_browser` | `Url` | Observe | `observe` |
+| `slasher_browser` | `Locate` | Observe | `observe` |
+| `slasher_browser` | `DomText` | Observe | `observe` |
+| `slasher_browser` | `Attribute` | Observe | `observe` |
+| `slasher_browser` | `Screenshot` | Observe | `observe` |
+| `slasher_browser` | `Links` | Observe | `observe` |
+| `slasher_browser` | `Windows` | Observe | `observe` |
 | `slasher_io` | `Step` | Observe | `observe` |
 | `slasher_io` | `Log` | Observe | `observe` |
 | `slasher_io` | `Wait` | Observe | `observe` |
@@ -78,8 +100,11 @@ catalog maps known Numadora-facing calls to the security classes in
 when it can statically recognize `IMPORT module AS alias` plus
 `alias.Function(...)` calls. Run mode records the same capabilities in
 `numadora.hostCall` events. Interactive input requires both target identity and
-explicit `allowInteractiveInput` approval; otherwise `slasher_input.Text` fails
-closed without sending text.
+explicit `allowInteractiveInput` approval; otherwise `slasher_input.Text`,
+`slasher_input.Keys`, `slasher_input.Mouse`, `slasher_input.Wheel`, and
+`slasher_input.Drag`, and `slasher_input.ContextMenu` fail closed without
+sending input. Approved input revalidates the foreground target immediately
+before sending.
 
 ## Runtime Boundary
 
