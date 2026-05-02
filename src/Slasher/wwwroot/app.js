@@ -420,10 +420,17 @@ function setScriptRunning(running) {
   $("script-run").disabled = running;
   $("script-check").disabled = running;
   $("script-stop").disabled = !running;
+  $("script-allow-input").disabled = running;
   $("script-status-text").textContent = running ? "running" : "idle";
 }
 
 function updateScriptLanguageState() {
+  const isNumadora = $("script-language").value === "numadora";
+  $("script-allow-input").disabled = state.scriptRunning || !isNumadora;
+  if (!isNumadora) {
+    $("script-allow-input").checked = false;
+  }
+
   $("script-run").disabled = state.scriptRunning;
   $("script-status-text").textContent = state.scriptRunning ? "running" : "idle";
 }
@@ -458,9 +465,10 @@ async function runScript() {
   log(`${language} script started`);
 
   try {
+    const allowInteractiveInput = language === "numadora" && $("script-allow-input").checked;
     const response = await api("/scripts/run", {
       method: "POST",
-      body: JSON.stringify({ script, language, purpose: "web-ui-script" }),
+      body: JSON.stringify({ script, language, purpose: "web-ui-script", allowInteractiveInput }),
       signal: state.scriptAbortController.signal
     });
     await renderScriptRunResponse(response);

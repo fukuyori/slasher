@@ -158,17 +158,47 @@ Already implemented groundwork:
 - Blocked host calls can include diagnostic `hostCalls`.
 - Safe `slasher_io` host-call output is parsed into `hostCalls`.
 - Observed safe host calls appear as `numadora.hostCall` timeline events.
+- Policy-allowed observe calls can now execute through Slasher after the
+  Numadora CLI run, starting with `slasher_window.WaitForTitle` and
+  `slasher_test.AssertForegroundTitle`.
+- The first non-observe bridge target, `slasher_app.Start`, now executes
+  through Slasher after policy allow and records process/window metadata or a
+  normal `app_start_failed` error.
+- Policy input now includes the current foreground target identity when Slasher
+  can observe it. `User-input` class calls deny with
+  `numadora_policy_missing_target` when no target identity is available.
+- `slasher_window.Focus` now derives target identity from the host-call handle
+  argument and executes through Slasher after policy allow.
+- `slasher_input.Text` now reaches the same host-call policy event path, but
+  still fails closed without explicit `allowInteractiveInput` approval; no text
+  is sent by default.
 
-Next bridge step:
+Bridge steps completed so far:
 
 1. Add a `NumadoraPolicyInput` model in Slasher.
 2. Build policy input from `ScriptCapabilityRequirement`, parsed host call,
    run source, and current target evidence.
 3. Add an in-process `NumadoraPolicyEvaluator`.
-4. Return `allow`, `denyCode`, `reason`, and redaction directives.
+4. Return `allow`, `denyCode`, and `reason`.
 5. Emit policy decision details into `events.jsonl`.
-6. Only after this gate exists, connect selected host calls to actual Slasher
-   automation actions.
+6. Connect selected observe host calls to actual Slasher observation actions.
+7. Connect `slasher_app.Start` to actual Slasher process start handling.
+8. Attach foreground target identity to policy input and fail closed for
+   target-dependent input calls without target evidence.
+9. Connect `slasher_window.Focus` to actual Slasher focus handling when the
+   host call carries an explicit handle target.
+10. Route `slasher_input.Text` through the policy event path without sending
+    input until approval semantics are explicit.
+11. Add an explicit `allowInteractiveInput` run approval. The policy evaluator
+    allows `slasher_input.Text` only when target identity exists and this
+    approval is true.
+12. Expose the approval as an off-by-default Numadora-only checkbox in the Web
+    UI and as an explicit MCP/tool request field.
+
+Next bridge step:
+
+- Extend the same policy envelope to input and focus calls after target
+  metadata and approval rules are explicit.
 
 ## Phased Plan
 
@@ -203,12 +233,21 @@ host-call bridge remains disabled.
 
 ### L3: Real Host Calls Behind Policy
 
-- Execute the first non-observe host call only after policy allow.
-- Recommended first real bridge target: `slasher_app.Start` or
-  `slasher_window.WaitForTitle`, because both already have clear event
-  metadata requirements.
-- Preserve the existing `numadora.hostCall` event as the policy and call
+- [x] Execute the first observe host calls only after policy allow.
+- [x] Preserve the existing `numadora.hostCall` event as the policy and call
   envelope.
+- [x] Execute the first non-observe host call only after policy allow.
+- [x] Bridge `slasher_app.Start` with process/window event metadata.
+- [x] Include foreground target identity in policy input when available.
+- [x] Deny target-dependent input calls when no target identity is present.
+- [x] Bridge `slasher_window.Focus` only when an explicit handle target is
+  present.
+- [x] Route `slasher_input.Text` to a policy-denied `numadora.hostCall` event
+  without sending input.
+- [x] Add explicit `allowInteractiveInput` approval for text input policy.
+- [x] Expose interactive input approval in MCP and Web UI as an explicit opt-in.
+- [ ] Bridge text input in normal UI flows only after selected or foreground
+  target identity is explicit and policy-approved.
 
 ### L4: External Policy Adapter
 

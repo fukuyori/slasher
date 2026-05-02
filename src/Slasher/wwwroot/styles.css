@@ -367,8 +367,17 @@ h3 {
 
 .field span,
 .checkbox {
+  align-items: center;
   color: #4f6070;
+  display: inline-flex;
   font-size: 13px;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.checkbox input {
+  margin: 0;
+  width: auto;
 }
 
 input,

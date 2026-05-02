@@ -24,6 +24,11 @@ public sealed class NumadoraPolicyEvaluator
             return Deny("numadora_policy_sensitive_lineage", "Sensitive lineage is not allowed for this host call.");
         }
 
+        if (RequiresTargetIdentity(input.Capability) && input.Target is null)
+        {
+            return Deny("numadora_policy_missing_target", "Host call requires selected or foreground target identity.");
+        }
+
         if (input.Capability.Module.Equals("slasher_io", StringComparison.OrdinalIgnoreCase))
         {
             return Allow("numadora_policy_allowed_local_observe", "slasher_io host call is allowed in the local observation profile.");
@@ -32,6 +37,28 @@ public sealed class NumadoraPolicyEvaluator
         if (input.Capability.Profile.Equals("observe", StringComparison.OrdinalIgnoreCase))
         {
             return Allow("numadora_policy_allowed_observe", "Observe profile host call is allowed.");
+        }
+
+        if (input.Capability.Module.Equals("slasher_app", StringComparison.OrdinalIgnoreCase)
+            && input.Capability.Function.Equals("Start", StringComparison.OrdinalIgnoreCase)
+            && input.Capability.CapabilityClass.Equals("Process/app", StringComparison.OrdinalIgnoreCase))
+        {
+            return Allow("numadora_policy_allowed_process_app_start", "slasher_app.Start is allowed with local process metadata auditing.");
+        }
+
+        if (input.Capability.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
+            && input.Capability.Function.Equals("Focus", StringComparison.OrdinalIgnoreCase)
+            && input.Target is not null)
+        {
+            return Allow("numadora_policy_allowed_window_focus", "slasher_window.Focus is allowed with explicit target identity.");
+        }
+
+        if (input.Capability.Module.Equals("slasher_input", StringComparison.OrdinalIgnoreCase)
+            && input.Capability.Function.Equals("Text", StringComparison.OrdinalIgnoreCase))
+        {
+            return HasApproval(input, "interactiveInput")
+                ? Allow("numadora_policy_allowed_interactive_input", "slasher_input.Text is allowed by explicit interactive input approval.")
+                : Deny("numadora_policy_interactive_input_not_approved", "Interactive text input requires explicit approval.");
         }
 
         return Deny("numadora_policy_profile_blocked", $"Profile '{input.Capability.Profile}' is not enabled for execution.");
@@ -53,6 +80,30 @@ public sealed class NumadoraPolicyEvaluator
             || profile.Equals("browser-data", StringComparison.OrdinalIgnoreCase)
             || profile.Equals("secrets", StringComparison.OrdinalIgnoreCase)
             || profile.Equals("unattended", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool RequiresTargetIdentity(ScriptCapabilityRequirement capability)
+    {
+        return capability.CapabilityClass.Equals("User-input", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasApproval(NumadoraPolicyInput input, string name)
+    {
+        if (input.Approvals is null)
+        {
+            return false;
+        }
+
+        foreach (var item in input.Approvals)
+        {
+            if (item.Key.Equals(name, StringComparison.OrdinalIgnoreCase)
+                && item.Value is bool value)
+            {
+                return value;
+            }
+        }
+
+        return false;
     }
 
     private static bool HasSensitiveLineage(NumadoraPolicyInput input)

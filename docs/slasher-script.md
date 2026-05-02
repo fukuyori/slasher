@@ -79,6 +79,10 @@ input.Text("hello")
 test.AssertForegroundTitle("contains", "Notepad")
 ```
 
+`input.Text(...)` is intentionally stricter in run mode than in check mode. It
+requires target identity and explicit `allowInteractiveInput` approval before
+Slasher sends text to the foreground application.
+
 This is intentionally different from the v1 `.slasher` command style:
 
 ```text

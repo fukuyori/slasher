@@ -717,7 +717,8 @@ const tools = [
         script: { type: "string" },
         stopOnError: { type: "boolean" },
         language: { type: "string", enum: ["slasher", "numadora", "numa"] },
-        purpose: { type: "string" }
+        purpose: { type: "string" },
+        allowInteractiveInput: { type: "boolean" }
       },
       required: ["script"],
       additionalProperties: false
@@ -732,7 +733,8 @@ const tools = [
         path: { type: "string" },
         stopOnError: { type: "boolean" },
         language: { type: "string", enum: ["slasher", "numadora", "numa"] },
-        purpose: { type: "string" }
+        purpose: { type: "string" },
+        allowInteractiveInput: { type: "boolean" }
       },
       required: ["path"],
       additionalProperties: false
@@ -847,7 +849,7 @@ async function handleMessage(message) {
         },
         serverInfo: {
           name: "slasher-mcp",
-          version: "0.2.1"
+          version: "0.2.2"
         }
       });
       return;
@@ -1253,6 +1255,7 @@ async function callTool(name, args) {
         stopOnError: args.stopOnError ?? true,
         language: args.language,
         purpose: args.purpose,
+        allowInteractiveInput: args.allowInteractiveInput ?? false,
         name: "mcp-script-run"
       });
       return runScriptResult(run);
@@ -1264,6 +1267,7 @@ async function callTool(name, args) {
         stopOnError: args.stopOnError ?? true,
         language: args.language,
         purpose: args.purpose,
+        allowInteractiveInput: args.allowInteractiveInput ?? false,
         name: "mcp-script-file-run"
       });
       return runScriptResult(run);

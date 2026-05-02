@@ -170,32 +170,36 @@ Current implementation status:
 - Numadora runs record lightweight lineage metadata, including purpose,
   actor surface, script entry point, script SHA-256, local classification, and
   redaction mode
-- pure `.numa` scripts, and scripts limited to the temporary `slasher_io` stub
-  surface, can run through the local Numadora CLI and capture stdout/stderr as
+- pure `.numa` scripts, and scripts using policy-enabled Slasher host-call
+  stubs, can run through the local Numadora CLI and capture stdout/stderr as
   Slasher logs
 - successful local runs also parse structured `__SLASHER_HOST_CALL__` output
   into event `hostCalls` parameters and `numadora.hostCall` log entries
-- each observed safe host call is also appended as a `numadora.hostCall` event
-  in the Slasher timeline; these events are diagnostic observations from the
-  Numadora stub path, not GUI/input execution
-- scripts requiring process, window, input, browser, file, clipboard, or other
-  host-call bindings create normal failed run artifacts with
-  `numadora_run_not_implemented`
+- each observed host call is also appended as a `numadora.hostCall` event in
+  the Slasher timeline with `policyInput`, `policyDecision`, target metadata
+  when available, and execution results
+- policy-enabled host calls currently include `slasher_io` observations,
+  `slasher_window.WaitForTitle`, `slasher_test.AssertForegroundTitle`,
+  `slasher_app.Start`, and `slasher_window.Focus`
+- `slasher_input.Text` requires target identity and explicit
+  `allowInteractiveInput` approval. Without that approval, it fails closed as a
+  policy-denied `numadora.hostCall` event without sending text
+- scripts requiring browser, file, clipboard, or other non-enabled host-call
+  bindings create normal failed run artifacts with `numadora_run_not_implemented`
 - host-call blocked failures include `requiredCapabilities`,
   `blockedCapabilities`, `allowedLocalModules`, and `runMode` in error details
 - host-call blocked failures may also include a `hostCalls` trace captured from
   Slasher-owned safe stub modules; this is diagnostic only and does not execute
   GUI actions
-- observed host calls include a `policyInput` object for the future policy
+- observed host calls include a `policyInput` object for the in-process policy
   evaluator; blocked host-call failures include `policyInputs` when trace data
   is available
-- observed and blocked host calls also record initial `policyDecision` /
-  `policyDecisions` values from the in-process evaluator; these decisions are
-  currently diagnostic and are not yet used to execute real GUI/input actions
+- observed and blocked host calls also record `policyDecision` /
+  `policyDecisions` values from the in-process evaluator
 - invalid `.numa` scripts create normal failed run artifacts with
   `numadora_check_failed`
-- no GUI, browser, file, clipboard, or host-call action is executed by this
-  initial run path
+- browser, file, clipboard, and non-enabled host-call actions are not executed
+  by this run path
 
 Input:
 

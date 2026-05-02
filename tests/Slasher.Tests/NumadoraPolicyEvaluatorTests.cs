@@ -67,19 +67,71 @@ public sealed class NumadoraPolicyEvaluatorTests
     }
 
     [Fact]
-    public void Evaluate_DeniesInteractiveProfileUntilExecutionPolicyExists()
+    public void Evaluate_DeniesUserInputWithoutTarget()
     {
         var decision = _evaluator.Evaluate(
             CreateInput(Capability("slasher_input", "Text", "User-input", "interactive")));
 
         Assert.False(decision.Allow);
-        Assert.Equal("numadora_policy_profile_blocked", decision.Code);
+        Assert.Equal("numadora_policy_missing_target", decision.Code);
+    }
+
+    [Fact]
+    public void Evaluate_DeniesInteractiveProfileUntilExecutionPolicyExists()
+    {
+        var decision = _evaluator.Evaluate(
+            CreateInput(
+                Capability("slasher_input", "Text", "User-input", "interactive"),
+                target: new AutomationTarget("window", Handle: "0x1", Title: "target")));
+
+        Assert.False(decision.Allow);
+        Assert.Equal("numadora_policy_interactive_input_not_approved", decision.Code);
+    }
+
+    [Fact]
+    public void Evaluate_AllowsInteractiveInputWithExplicitApprovalAndTarget()
+    {
+        var decision = _evaluator.Evaluate(
+            CreateInput(
+                Capability("slasher_input", "Text", "User-input", "interactive"),
+                target: new AutomationTarget("window", Handle: "0x1", Title: "target"),
+                approvals: new Dictionary<string, object?>
+                {
+                    ["interactiveInput"] = true,
+                }));
+
+        Assert.True(decision.Allow);
+        Assert.Equal("numadora_policy_allowed_interactive_input", decision.Code);
+    }
+
+    [Fact]
+    public void Evaluate_AllowsAppStartWithProcessAuditPolicy()
+    {
+        var decision = _evaluator.Evaluate(
+            CreateInput(Capability("slasher_app", "Start", "Process/app", "interactive")));
+
+        Assert.True(decision.Allow);
+        Assert.Equal("numadora_policy_allowed_process_app_start", decision.Code);
+    }
+
+    [Fact]
+    public void Evaluate_AllowsWindowFocusWithExplicitTarget()
+    {
+        var decision = _evaluator.Evaluate(
+            CreateInput(
+                Capability("slasher_window", "Focus", "User-input", "interactive"),
+                target: new AutomationTarget("window", Handle: "0x1")));
+
+        Assert.True(decision.Allow);
+        Assert.Equal("numadora_policy_allowed_window_focus", decision.Code);
     }
 
     private static NumadoraPolicyInput CreateInput(
         ScriptCapabilityRequirement? capability,
         string purpose = "local-test",
-        IReadOnlyDictionary<string, object?>? lineage = null)
+        IReadOnlyDictionary<string, object?>? lineage = null,
+        AutomationTarget? target = null,
+        IReadOnlyDictionary<string, object?>? approvals = null)
     {
         return new NumadoraPolicyInput(
             Language: "numadora",
@@ -97,7 +149,9 @@ public sealed class NumadoraPolicyEvaluatorTests
                 {
                     ["classification"] = "local",
                 },
-            });
+            },
+            Target: target,
+            Approvals: approvals);
     }
 
     private static ScriptCapabilityRequirement Capability(

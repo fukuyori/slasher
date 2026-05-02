@@ -1,6 +1,6 @@
 # Slasher
 
-Current version: 0.2.1.
+Current version: 0.2.2.
 
 Slasher is a small Windows automation server written in C#. It exposes HTTP APIs for starting applications, enumerating and manipulating windows, sending keyboard and mouse input, and taking screenshots.
 

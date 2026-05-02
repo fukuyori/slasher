@@ -1,4 +1,4 @@
-# Slasher 0.2.1 Handoff
+# Slasher 0.2.2 Handoff
 
 Last confirmed commit:
 
@@ -17,7 +17,7 @@ Working tree was clean after the commit.
   Numadora path covers the core loop.
 - Do not preserve old Slasher syntax by adding a Slasher-only Numadora dialect.
 
-## Completed In 0.2.1
+## Completed In 0.2.2
 
 - Removed the old standalone Slasher Script compiler plan from active docs.
 - Added the Numadora language and migration documentation set.
@@ -25,7 +25,7 @@ Working tree was clean after the commit.
 - Added current Numadora-compatible sample modules and Notepad check sample.
 - Added `docs/security-policy.md` for security rules around powerful PC
   automation.
-- Set Slasher version metadata to `0.2.1`.
+- Set Slasher version metadata to `0.2.2`.
 
 ## N0 Status
 
@@ -95,7 +95,8 @@ Implemented after the `d02fec4 0.2.0` commit:
 - MCP check and run tools accept
   `language: "numadora"`.
 - The Web UI script checker and runner use the Slasher/Numadora selector.
-  Pure Numadora scripts can run; host-call scripts still stop safely.
+  Pure Numadora scripts can run; host-call scripts outside the policy-enabled
+  local observe profile still stop safely.
 - Numadora check responses include `requiredCapabilities` for recognized
   initial bindings such as `slasher_app.Start`, `slasher_input.Text`, and
   `slasher_test.AssertForegroundTitle`.
@@ -110,11 +111,15 @@ Implemented after the `d02fec4 0.2.0` commit:
   surface, can run through the local Numadora CLI and capture stdout/stderr as
   Slasher logs. Structured stub output is also captured as event `hostCalls`
   and `numadora.hostCall` log entries, with observed safe host calls appended
-  as `numadora.hostCall` timeline events. Scripts requiring process, window,
-  input, browser, file, clipboard, or other host-call bindings still return
+  as `numadora.hostCall` timeline events. Policy-allowed observe calls now
+  execute through Slasher for `slasher_window.WaitForTitle` and
+  `slasher_test.AssertForegroundTitle`. `slasher_app.Start` now executes
+  through Slasher after policy allow and records process/window metadata or a
+  normal `app_start_failed` event. Scripts requiring input, focus, browser,
+  file, clipboard, or other non-enabled host-call bindings still return
   `numadora_run_not_implemented`.
 - Host-call blocked runs include `blockedCapabilities`, `allowedLocalModules`,
-  and `runMode` in the error details.
+  `allowedLocalHostCalls`, and `runMode` in the error details.
 - MCP run summaries and the Web UI diagnostics panel show blocked Numadora
   host-call capabilities and diagnostic `hostCalls`.
 - The blocked path now captures a diagnostic `hostCalls` trace from safe
@@ -132,12 +137,34 @@ Implemented after the `d02fec4 0.2.0` commit:
 - Policy evaluator tests now cover the local observe allow path plus missing
   capability, missing purpose, dangerous capability, sensitive lineage, and
   interactive-profile denial cases.
+- The first policy-gated observe host-call test verifies that
+  `slasher_window.WaitForTitle` executes through Slasher and reports a normal
+  `window_not_found` error when the target does not appear.
+- The first policy-gated process/app host-call test verifies that
+  `slasher_app.Start` reaches Slasher's app-start path after policy allow and
+  reports `app_start_failed` for a missing executable without launching an app.
+- `NumadoraPolicyInput` now carries the current foreground target identity when
+  Slasher can observe it. `User-input` host calls deny with
+  `numadora_policy_missing_target` when no target identity is available, and
+  text input remains disabled even when a target exists.
+- `slasher_window.Focus` now derives target identity from its explicit handle
+  argument, passes policy as `numadora_policy_allowed_window_focus`, and reaches
+  Slasher's focus path. The test uses a missing handle and verifies a normal
+  `window_not_found` error without focusing a real app.
+- `slasher_input.Text` now reaches the same `numadora.hostCall` policy event
+  path and fails closed without explicit approval. `allowInteractiveInput` is
+  now available on script run requests, MCP run tools, and the Web UI's
+  Numadora-only input checkbox. The checkbox is off by default. The evaluator
+  only allows text input when a target identity exists and this approval is true.
 - The v1 `.slasher` check path remains unchanged.
 
 N1 goal:
 
-- Replace or back the current `.numa` stub modules with real Slasher host
-  bindings while keeping the same Numadora-facing function signatures.
+- Keep replacing the current `.numa` stub-module trace with policy-gated
+  Slasher host execution while preserving the same Numadora-facing function
+  signatures.
+- Next risky bridge target is exposing actual `slasher_input.Text` execution in
+  broader flows. Keep it opt-in and target-bound; do not make it a default.
 
 Start with these modules:
 
@@ -176,4 +203,4 @@ Notes:
   restore.
 - Recent tests had two environment-sensitive failures around screen capture
   (`bitblt_failed`). The project builds; those failures were not caused by the
-  0.2.1 version change.
+  0.2.2 version change.

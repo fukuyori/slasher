@@ -1,3 +1,5 @@
+using Slasher.Api;
+
 namespace Slasher.Automation;
 
 public sealed partial class ScriptRunService
@@ -9,6 +11,7 @@ public sealed partial class ScriptRunService
         bool stopOnError,
         CapturePolicy? capturePolicy,
         string? purpose,
+        bool allowInteractiveInput,
         CancellationToken cancellationToken)
     {
         var normalizedPurpose = NormalizeNumadoraPurpose(purpose);
@@ -21,7 +24,11 @@ public sealed partial class ScriptRunService
             new Dictionary<string, object?>
             {
                 ["purpose"] = normalizedPurpose,
-                ["lineage"] = lineage
+                ["lineage"] = lineage,
+                ["approvals"] = new Dictionary<string, object?>
+                {
+                    ["interactiveInput"] = allowInteractiveInput
+                }
             });
         var state = new ScriptExecutionState(report);
         var check = await CheckNumadoraAsync(checkRequest, cancellationToken);
@@ -52,7 +59,7 @@ public sealed partial class ScriptRunService
         var trace = await TraceNumadoraHostCallsAsync(checkRequest, check, cancellationToken);
         var exception = new ScriptCommandException(
             "numadora_run_not_implemented",
-            "Numadora host-call run integration is not implemented yet. Pure Numadora and slasher_io-only scripts can run.",
+            "Numadora host-call run integration is not implemented yet for this capability set. Pure Numadora, slasher_io, and policy-allowed observe scripts can run.",
             NumadoraRunDetails(check, trace, state.Report, normalizedPurpose),
             Recoverable: false);
         await RecordScriptErrorAsync(line, state, exception, stopOnError, cancellationToken);
@@ -127,10 +134,18 @@ public sealed partial class ScriptRunService
             }
 
             var result = await RunNumadoraProcessAsync(numadoraHome, "run", sourcePath, "run", cancellationToken);
-            AppendNumadoraProcessEvent(state, sourcePath, result, check, normalizedPurpose: NumadoraPurposeFromReport(state.Report));
-            var status = result.ExitCode == 0 ? AutomationRunStatus.Passed : AutomationRunStatus.Failed;
+            await AppendNumadoraProcessEventAsync(
+                state,
+                sourcePath,
+                result,
+                check,
+                normalizedPurpose: NumadoraPurposeFromReport(state.Report),
+                cancellationToken);
+            var status = result.ExitCode == 0 && state.FinalError is null
+                ? AutomationRunStatus.Passed
+                : AutomationRunStatus.Failed;
             state.Report = _artifacts.CompleteRun(state.Report, status, state.FinalError, null);
-            return new ScriptRunResponse(result.ExitCode == 0, state.Report, state.Events, state.FinalError);
+            return new ScriptRunResponse(status == AutomationRunStatus.Passed, state.Report, state.Events, state.FinalError);
         }
         catch (ScriptCommandException ex)
         {
@@ -161,12 +176,13 @@ public sealed partial class ScriptRunService
         }
     }
 
-    private void AppendNumadoraProcessEvent(
+    private async Task AppendNumadoraProcessEventAsync(
         ScriptExecutionState state,
         string sourcePath,
         NumadoraProcessResult result,
         ScriptCheckResponse check,
-        string normalizedPurpose)
+        string normalizedPurpose,
+        CancellationToken cancellationToken)
     {
         var sequence = state.NextSequence++;
         var startedAt = DateTimeOffset.UtcNow;
@@ -226,34 +242,39 @@ public sealed partial class ScriptRunService
 
         if (result.ExitCode == 0)
         {
-            AppendNumadoraHostCallEvents(state, sourcePath, hostCalls, check, normalizedPurpose);
+            await AppendNumadoraHostCallEventsAsync(state, sourcePath, hostCalls, check, normalizedPurpose, cancellationToken);
         }
     }
 
-    private void AppendNumadoraHostCallEvents(
+    private async Task AppendNumadoraHostCallEventsAsync(
         ScriptExecutionState state,
         string sourcePath,
         IReadOnlyList<NumadoraHostCall> hostCalls,
         ScriptCheckResponse check,
-        string normalizedPurpose)
+        string normalizedPurpose,
+        CancellationToken cancellationToken)
     {
         foreach (var hostCall in hostCalls)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var sequence = state.NextSequence++;
             var startedAt = DateTimeOffset.UtcNow;
-            var endedAt = DateTimeOffset.UtcNow;
             var formatted = FormatNumadoraHostCall(hostCall);
-            var policyInput = BuildNumadoraPolicyInput(state.Report, hostCall, check, normalizedPurpose);
+            var policyTarget = GetNumadoraPolicyTarget(hostCall);
+            var policyInput = BuildNumadoraPolicyInput(state.Report, hostCall, check, normalizedPurpose, policyTarget);
             var policyDecision = _numadoraPolicy.Evaluate(policyInput);
+            var execution = await ExecuteNumadoraLocalHostCallAsync(hostCall, policyInput, policyDecision, cancellationToken);
+            var endedAt = DateTimeOffset.UtcNow;
             var automationEvent = _artifacts.CreateEvent(
                 state.Report,
                 sequence,
                 "numadora.hostCall",
                 startedAt,
                 endedAt,
-                ok: true,
+                ok: execution.Ok,
                 step: formatted,
                 source: new AutomationSource(sourcePath, 1, 1, formatted),
+                target: execution.Target,
                 parameters: new Dictionary<string, object?>
                 {
                     ["language"] = "numadora",
@@ -262,15 +283,10 @@ public sealed partial class ScriptRunService
                     ["arguments"] = hostCall.Arguments,
                     ["raw"] = hostCall.Raw,
                     ["policyInput"] = policyInput,
-                    ["policyDecision"] = policyDecision
+                    ["policyDecision"] = policyDecision,
+                    ["executedBy"] = execution.ExecutedBy
                 },
-                result: new
-                {
-                    Observed = true,
-                    ExecutedBy = "numadora-stub",
-                    PolicyAllowed = policyDecision.Allow,
-                    PolicyCode = policyDecision.Code
-                },
+                result: execution.Result,
                 logs:
                 [
                     new AutomationLogEntry(
@@ -278,11 +294,252 @@ public sealed partial class ScriptRunService
                         "info",
                         "numadora.hostCall",
                         formatted)
-                ]);
+                ],
+                error: execution.Error);
 
             state.Report = _artifacts.AppendEvent(state.Report, automationEvent);
             state.Events.Add(automationEvent);
+            if (execution.Error is not null)
+            {
+                state.FinalError = execution.Error;
+                break;
+            }
         }
+    }
+
+    private async Task<NumadoraLocalHostCallResult> ExecuteNumadoraLocalHostCallAsync(
+        NumadoraHostCall hostCall,
+        NumadoraPolicyInput policyInput,
+        NumadoraPolicyDecision policyDecision,
+        CancellationToken cancellationToken)
+    {
+        if (!policyDecision.Allow)
+        {
+            return NumadoraLocalHostCallResult.Failed(
+                "numadora_policy_denied",
+                policyDecision.Reason,
+                executedBy: "slasher-policy",
+                target: policyInput.Target);
+        }
+
+        if (hostCall.Module.Equals("slasher_io", StringComparison.OrdinalIgnoreCase))
+        {
+            return NumadoraLocalHostCallResult.Passed(new
+            {
+                Observed = true,
+                ExecutedBy = "numadora-stub",
+                PolicyAllowed = true,
+                PolicyCode = policyDecision.Code
+            });
+        }
+
+        if (hostCall.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("WaitForTitle", StringComparison.OrdinalIgnoreCase))
+        {
+            var (title, timeoutMs) = ParseNumadoraTitleAndOptionalTimeout(hostCall.Arguments, defaultTimeoutMs: 10000);
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_host_call_invalid_arguments",
+                    "slasher_window.WaitForTitle requires a title.",
+                    executedBy: "slasher-window");
+            }
+
+            var window = await _automation.WaitForWindowAsync(
+                new WindowQueryRequest(title, TimeoutMs: timeoutMs),
+                cancellationToken);
+            if (window is null)
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "window_not_found",
+                    $"No window containing '{title}' was found before the timeout.",
+                    executedBy: "slasher-window",
+                    expected: new { exists = true, title, timeoutMs },
+                    actual: new { exists = false });
+            }
+
+            return NumadoraLocalHostCallResult.Passed(
+                new
+                {
+                    observed = true,
+                    title = window.Title,
+                    handle = window.Handle,
+                    timeoutMs,
+                    executedBy = "slasher-window",
+                    policyAllowed = true,
+                    policyCode = policyDecision.Code
+                },
+                ToTarget(window),
+                "slasher-window");
+        }
+
+        if (hostCall.Module.Equals("slasher_app", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("Start", StringComparison.OrdinalIgnoreCase))
+        {
+            var fileName = string.Join(' ', hostCall.Arguments).Trim();
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_host_call_invalid_arguments",
+                    "slasher_app.Start requires a file name.",
+                    executedBy: "slasher-app");
+            }
+
+            try
+            {
+                var result = _automation.StartApp(new StartAppRequest(fileName));
+                var target = result.MainWindowHandle is null
+                    ? null
+                    : new AutomationTarget(
+                        "window",
+                        result.MainWindowHandle,
+                        result.MainWindowTitle,
+                        ProcessId: result.ProcessId,
+                        ProcessName: result.ProcessName);
+                return NumadoraLocalHostCallResult.Passed(
+                    new
+                    {
+                        started = true,
+                        fileName,
+                        result.ProcessId,
+                        result.ProcessName,
+                        result.MainWindowHandle,
+                        result.MainWindowTitle,
+                        executedBy = "slasher-app",
+                        policyAllowed = true,
+                        policyCode = policyDecision.Code
+                    },
+                    target,
+                    "slasher-app");
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or System.ComponentModel.Win32Exception)
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "app_start_failed",
+                    ex.Message,
+                    executedBy: "slasher-app",
+                    expected: new { started = true, fileName },
+                    actual: new { started = false, error = ex.GetType().Name });
+            }
+        }
+
+        if (hostCall.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("Focus", StringComparison.OrdinalIgnoreCase))
+        {
+            var handle = string.Join(' ', hostCall.Arguments).Trim();
+            if (string.IsNullOrWhiteSpace(handle))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_host_call_invalid_arguments",
+                    "slasher_window.Focus requires a window handle.",
+                    executedBy: "slasher-window");
+            }
+
+            var target = new AutomationTarget("window", Handle: handle);
+            if (!_automation.FocusWindow(handle, out var error))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    error?.Code ?? "focus_failed",
+                    error?.Message ?? "Failed to focus the target window.",
+                    executedBy: "slasher-window",
+                    target: target,
+                    expected: new { focused = true, handle },
+                    actual: new { focused = false });
+            }
+
+            var refreshed = _automation.TryGetWindow(handle, out var window) ? ToTarget(window) : target;
+            return NumadoraLocalHostCallResult.Passed(
+                new
+                {
+                    focused = true,
+                    handle,
+                    executedBy = "slasher-window",
+                    policyAllowed = true,
+                    policyCode = policyDecision.Code
+                },
+                refreshed,
+                "slasher-window");
+        }
+
+        if (hostCall.Module.Equals("slasher_input", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("Text", StringComparison.OrdinalIgnoreCase))
+        {
+            var text = string.Join(' ', hostCall.Arguments);
+            if (!_automation.SendText(new TextInputRequest(text), out var error))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    error?.Code ?? "text_failed",
+                    error?.Message ?? "Failed to send text input.",
+                    executedBy: "slasher-input",
+                    target: policyInput.Target,
+                    expected: new { sent = true, chars = text.Length },
+                    actual: new { sent = false });
+            }
+
+            return NumadoraLocalHostCallResult.Passed(
+                new
+                {
+                    sent = true,
+                    chars = text.Length,
+                    executedBy = "slasher-input",
+                    policyAllowed = true,
+                    policyCode = policyDecision.Code
+                },
+                policyInput.Target,
+                "slasher-input");
+        }
+
+        if (hostCall.Module.Equals("slasher_test", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("AssertForegroundTitle", StringComparison.OrdinalIgnoreCase))
+        {
+            var (op, expected) = ParseNumadoraOperatorAndExpected(hostCall.Arguments);
+            if (string.IsNullOrWhiteSpace(op) || string.IsNullOrWhiteSpace(expected))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_host_call_invalid_arguments",
+                    "slasher_test.AssertForegroundTitle requires an operator and expected text.",
+                    executedBy: "slasher-test");
+            }
+
+            if (!_automation.TryGetForegroundWindow(out var window) || window is null)
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "foreground_window_not_found",
+                    "No foreground window was found.",
+                    executedBy: "slasher-test");
+            }
+
+            var actual = window.Title ?? string.Empty;
+            if (!MatchesNumadoraTitleAssertion(actual, op, expected))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "assertion_failed",
+                    $"Title assertion failed. Expected title {op} '{expected}', actual '{actual}'.",
+                    executedBy: "slasher-test",
+                    target: ToTarget(window),
+                    expected: new { title = expected, op },
+                    actual: new { title = actual, window.Handle });
+            }
+
+            return NumadoraLocalHostCallResult.Passed(
+                new
+                {
+                    asserted = true,
+                    title = actual,
+                    op,
+                    expected,
+                    executedBy = "slasher-test",
+                    policyAllowed = true,
+                    policyCode = policyDecision.Code
+                },
+                ToTarget(window),
+                "slasher-test");
+        }
+
+        return NumadoraLocalHostCallResult.Failed(
+            "numadora_host_call_not_enabled",
+            $"Host call '{hostCall.Module}.{hostCall.Function}' is not enabled for local execution.",
+            executedBy: "slasher-host");
     }
 
     private static IReadOnlyList<AutomationLogEntry> BuildNumadoraLogs(NumadoraProcessResult result)
@@ -347,16 +604,22 @@ public sealed partial class ScriptRunService
             ["diagnostics"] = diagnostics,
             ["requiredCapabilities"] = requiredCapabilities,
             ["blockedCapabilities"] = blockedCapabilities,
-            ["allowedLocalModules"] = new[] { "slasher_io" },
+            ["allowedLocalModules"] = new[] { "slasher_io", "slasher_window", "slasher_test" },
+            ["allowedLocalHostCalls"] = new[]
+            {
+                "slasher_io.*",
+                "slasher_window.WaitForTitle",
+                "slasher_test.AssertForegroundTitle"
+            },
             ["runMode"] = blockedCapabilities.Length == 0 ? "local-numadora-cli" : "blocked-host-call",
             ["hostCalls"] = trace?.HostCalls ?? [],
             ["policyInputs"] = trace?.HostCalls is null || report is null
                 ? []
-                : trace.HostCalls.Select(call => BuildNumadoraPolicyInput(report, call, check, normalizedPurpose)).ToArray(),
+                : trace.HostCalls.Select(call => BuildNumadoraPolicyInput(report, call, check, normalizedPurpose, GetNumadoraPolicyTarget(call))).ToArray(),
             ["policyDecisions"] = trace?.HostCalls is null || report is null
                 ? []
                 : trace.HostCalls
-                    .Select(call => _numadoraPolicy.Evaluate(BuildNumadoraPolicyInput(report, call, check, normalizedPurpose)))
+                    .Select(call => _numadoraPolicy.Evaluate(BuildNumadoraPolicyInput(report, call, check, normalizedPurpose, GetNumadoraPolicyTarget(call))))
                     .ToArray(),
             ["hostCallTraceExitCode"] = trace?.ExitCode,
             ["hostCallTraceRaw"] = trace?.Raw,
@@ -367,7 +630,57 @@ public sealed partial class ScriptRunService
 
     private static bool CanRunNumadoraCapabilityLocally(ScriptCapabilityRequirement item)
     {
-        return item.Module.Equals("slasher_io", StringComparison.OrdinalIgnoreCase);
+        return item.Module.Equals("slasher_io", StringComparison.OrdinalIgnoreCase)
+            || (item.Module.Equals("slasher_app", StringComparison.OrdinalIgnoreCase)
+                && item.Function.Equals("Start", StringComparison.OrdinalIgnoreCase))
+            || (item.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
+                && item.Function.Equals("Focus", StringComparison.OrdinalIgnoreCase))
+            || (item.Module.Equals("slasher_input", StringComparison.OrdinalIgnoreCase)
+                && item.Function.Equals("Text", StringComparison.OrdinalIgnoreCase))
+            || (item.CapabilityClass.Equals("Observe", StringComparison.OrdinalIgnoreCase)
+                && item.Profile.Equals("observe", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static (string Title, int TimeoutMs) ParseNumadoraTitleAndOptionalTimeout(
+        IReadOnlyList<string> args,
+        int defaultTimeoutMs)
+    {
+        var value = string.Join(' ', args).Trim();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return (string.Empty, defaultTimeoutMs);
+        }
+
+        var lastSpace = value.LastIndexOf(' ');
+        if (lastSpace > 0 && int.TryParse(value[(lastSpace + 1)..], out var timeoutMs))
+        {
+            return (value[..lastSpace].Trim(), Math.Max(1, timeoutMs));
+        }
+
+        return (value, defaultTimeoutMs);
+    }
+
+    private static (string Operator, string Expected) ParseNumadoraOperatorAndExpected(IReadOnlyList<string> args)
+    {
+        var value = string.Join(' ', args).Trim();
+        var firstSpace = value.IndexOf(' ');
+        return firstSpace <= 0
+            ? (value, string.Empty)
+            : (value[..firstSpace].Trim(), value[(firstSpace + 1)..].Trim());
+    }
+
+    private static bool MatchesNumadoraTitleAssertion(string actual, string op, string expected)
+    {
+        return op.ToLowerInvariant() switch
+        {
+            "contains" => actual.Contains(expected, StringComparison.OrdinalIgnoreCase),
+            "notcontains" or "not-contains" => !actual.Contains(expected, StringComparison.OrdinalIgnoreCase),
+            "==" or "=" or "equals" => string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase),
+            "!=" or "notequals" or "not-equals" => !string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase),
+            "startswith" or "starts-with" => actual.StartsWith(expected, StringComparison.OrdinalIgnoreCase),
+            "endswith" or "ends-with" => actual.EndsWith(expected, StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
     }
 
     private async Task<IReadOnlyDictionary<string, object?>> BuildNumadoraLineageAsync(
@@ -408,7 +721,8 @@ public sealed partial class ScriptRunService
         AutomationRunReport report,
         NumadoraHostCall hostCall,
         ScriptCheckResponse check,
-        string normalizedPurpose)
+        string normalizedPurpose,
+        AutomationTarget? target = null)
     {
         return new NumadoraPolicyInput(
             "numadora",
@@ -417,7 +731,25 @@ public sealed partial class ScriptRunService
             NumadoraSurfaceFromReport(report),
             FindNumadoraCapability(hostCall.Module, hostCall.Function, check),
             new NumadoraPolicyHostCall(hostCall.Module, hostCall.Function, hostCall.Arguments),
-            NumadoraLineageFromReport(report));
+            NumadoraLineageFromReport(report),
+            target,
+            NumadoraApprovalsFromReport(report));
+    }
+
+    private AutomationTarget? GetNumadoraPolicyTarget(NumadoraHostCall hostCall)
+    {
+        if (hostCall.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("Focus", StringComparison.OrdinalIgnoreCase))
+        {
+            var handle = string.Join(' ', hostCall.Arguments).Trim();
+            return string.IsNullOrWhiteSpace(handle)
+                ? null
+                : new AutomationTarget("window", Handle: handle);
+        }
+
+        return _automation.TryGetForegroundWindow(out var foreground) && foreground is not null
+            ? ToTarget(foreground)
+            : null;
     }
 
     private static ScriptCapabilityRequirement? FindNumadoraCapability(
@@ -482,6 +814,21 @@ public sealed partial class ScriptRunService
         {
             ["purpose"] = NumadoraPurposeFromReport(report),
             ["runId"] = report.RunId
+        };
+    }
+
+    private static IReadOnlyDictionary<string, object?> NumadoraApprovalsFromReport(AutomationRunReport report)
+    {
+        if (report.Metadata is not null
+            && report.Metadata.TryGetValue("approvals", out var approvals)
+            && approvals is IReadOnlyDictionary<string, object?> typed)
+        {
+            return typed;
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["interactiveInput"] = false
         };
     }
 
@@ -581,4 +928,43 @@ public sealed partial class ScriptRunService
         string Function,
         IReadOnlyList<string> Arguments,
         string Raw);
+
+    private sealed record NumadoraLocalHostCallResult(
+        bool Ok,
+        object? Result,
+        AutomationTarget? Target,
+        AutomationError? Error,
+        string ExecutedBy)
+    {
+        public static NumadoraLocalHostCallResult Passed(
+            object? result,
+            AutomationTarget? target = null,
+            string executedBy = "slasher-host")
+        {
+            return new NumadoraLocalHostCallResult(true, result, target, null, executedBy);
+        }
+
+        public static NumadoraLocalHostCallResult Failed(
+            string code,
+            string message,
+            string executedBy,
+            AutomationTarget? target = null,
+            object? expected = null,
+            object? actual = null)
+        {
+            return new NumadoraLocalHostCallResult(
+                false,
+                new { executedBy },
+                target,
+                new AutomationError(
+                    code,
+                    message,
+                    Action: "numadora.hostCall",
+                    Target: target,
+                    Recoverable: false,
+                    Expected: expected,
+                    Actual: actual),
+                executedBy);
+        }
+    }
 }

@@ -620,17 +620,17 @@ public sealed class ScriptRunServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task RunFileAsync_NumaInteractiveBindingsReturnNotImplemented()
+    public async Task RunFileAsync_NumaInputTextReachesPolicyGateAndFailsClosed()
     {
         var scripts = Path.Combine(_workspaceRoot, "scripts");
         Directory.CreateDirectory(scripts);
         await WriteNumadoraStubModulesAsync(scripts);
         await File.WriteAllTextAsync(Path.Combine(scripts, "interactive.numa"),
             """
-            IMPORT slasher_app AS app
+            IMPORT slasher_input AS input
 
             FUNC main()
-                app.Start("notepad.exe")
+                input.Text("blocked")
             END
             """);
 
@@ -642,18 +642,135 @@ public sealed class ScriptRunServiceTests : IDisposable
 
         Assert.False(response.Ok);
         Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
-        Assert.Equal("numadora_run_not_implemented", response.Error?.Code);
+        Assert.Equal("numadora_policy_denied", response.Error?.Code);
         Assert.Equal(Path.Combine("scripts", "interactive.numa"), response.Run.EntryPoint);
-        Assert.NotNull(response.Error?.Details);
-        Assert.Equal("numadora", response.Error!.Details!["language"]);
-        Assert.Equal("blocked-host-call", response.Error.Details["runMode"]);
-        Assert.True(response.Error.Details.ContainsKey("blockedCapabilities"));
-        Assert.True(response.Error.Details.ContainsKey("allowedLocalModules"));
-        Assert.True(response.Error.Details.ContainsKey("policyInputs"));
-        Assert.True(response.Error.Details.ContainsKey("policyDecisions"));
-        var hostCalls = Assert.IsAssignableFrom<IReadOnlyList<object>>(response.Error.Details["hostCalls"]);
-        Assert.NotEmpty(hostCalls);
-        Assert.Contains(hostCalls, item => item.ToString()!.Contains("slasher_app", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(2, response.Events.Count);
+        var hostCallEvent = response.Events[1];
+        Assert.Equal("numadora.hostCall", hostCallEvent.Action);
+        Assert.False(hostCallEvent.Ok);
+        Assert.Equal("slasher_input", hostCallEvent.Parameters["module"]);
+        Assert.Equal("Text", hostCallEvent.Parameters["function"]);
+        Assert.Equal("slasher-policy", hostCallEvent.Parameters["executedBy"]);
+        var policyInput = Assert.IsType<NumadoraPolicyInput>(hostCallEvent.Parameters["policyInput"]);
+        Assert.NotNull(policyInput.Approvals);
+        Assert.False(Assert.IsType<bool>(policyInput.Approvals!["interactiveInput"]));
+        var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
+        Assert.False(policyDecision.Allow);
+        Assert.Equal("numadora_policy_interactive_input_not_approved", policyDecision.Code);
+    }
+
+    [Fact]
+    public async Task RunFileAsync_NumaObserveHostCallExecutesThroughSlasherPolicy()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "wait-for-missing-window.numa"),
+            """
+            IMPORT slasher_window AS win
+
+            FUNC main()
+                win.WaitForTitle("definitely-missing-slasher-window", 1)
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", "wait-for-missing-window.numa"),
+            Name: "unit-numadora-observe-host-call",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false)),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
+        Assert.Equal("window_not_found", response.Error?.Code);
+        Assert.Equal(2, response.Events.Count);
+        Assert.Equal("numadora.run", response.Events[0].Action);
+        var hostCallEvent = response.Events[1];
+        Assert.Equal("numadora.hostCall", hostCallEvent.Action);
+        Assert.False(hostCallEvent.Ok);
+        Assert.Equal("slasher_window", hostCallEvent.Parameters["module"]);
+        Assert.Equal("WaitForTitle", hostCallEvent.Parameters["function"]);
+        Assert.Equal("slasher-window", hostCallEvent.Parameters["executedBy"]);
+        var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
+        Assert.True(policyDecision.Allow);
+        Assert.Equal("numadora_policy_allowed_observe", policyDecision.Code);
+    }
+
+    [Fact]
+    public async Task RunFileAsync_NumaAppStartExecutesThroughSlasherPolicy()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "start-missing-app.numa"),
+            """
+            IMPORT slasher_app AS app
+
+            FUNC main()
+                app.Start("definitely-missing-slasher-app.exe")
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", "start-missing-app.numa"),
+            Name: "unit-numadora-app-start-host-call",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false),
+            Purpose: "app-start-policy-smoke"),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
+        Assert.Equal("app_start_failed", response.Error?.Code);
+        Assert.Equal(2, response.Events.Count);
+        var hostCallEvent = response.Events[1];
+        Assert.Equal("numadora.hostCall", hostCallEvent.Action);
+        Assert.False(hostCallEvent.Ok);
+        Assert.Equal("slasher_app", hostCallEvent.Parameters["module"]);
+        Assert.Equal("Start", hostCallEvent.Parameters["function"]);
+        Assert.Equal("slasher-app", hostCallEvent.Parameters["executedBy"]);
+        var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
+        Assert.True(policyDecision.Allow);
+        Assert.Equal("numadora_policy_allowed_process_app_start", policyDecision.Code);
+    }
+
+    [Fact]
+    public async Task RunFileAsync_NumaWindowFocusExecutesThroughSlasherPolicyWithTarget()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "focus-missing-window.numa"),
+            """
+            IMPORT slasher_window AS win
+
+            FUNC main()
+                win.Focus(1)
+            END
+            """);
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(
+            Path.Combine("scripts", "focus-missing-window.numa"),
+            Name: "unit-numadora-window-focus-host-call",
+            CapturePolicy: new CapturePolicy(CaptureOnError: false),
+            Purpose: "window-focus-policy-smoke"),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
+        Assert.Equal("window_not_found", response.Error?.Code);
+        Assert.Equal(2, response.Events.Count);
+        var hostCallEvent = response.Events[1];
+        Assert.Equal("numadora.hostCall", hostCallEvent.Action);
+        Assert.False(hostCallEvent.Ok);
+        Assert.Equal("slasher_window", hostCallEvent.Parameters["module"]);
+        Assert.Equal("Focus", hostCallEvent.Parameters["function"]);
+        Assert.Equal("slasher-window", hostCallEvent.Parameters["executedBy"]);
+        var policyInput = Assert.IsType<NumadoraPolicyInput>(hostCallEvent.Parameters["policyInput"]);
+        Assert.NotNull(policyInput.Target);
+        Assert.Equal("1", policyInput.Target!.Handle);
+        var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
+        Assert.True(policyDecision.Allow);
+        Assert.Equal("numadora_policy_allowed_window_focus", policyDecision.Code);
     }
 
     public void Dispose()

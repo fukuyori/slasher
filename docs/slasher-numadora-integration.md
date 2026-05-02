@@ -76,8 +76,10 @@ catalog maps known Numadora-facing calls to the security classes in
 
 `/scripts/check` reports these as `requiredCapabilities` for `.numa` scripts
 when it can statically recognize `IMPORT module AS alias` plus
-`alias.Function(...)` calls. This is a check-time preview only; run-time refusal
-for missing policy profiles belongs to N3/N4.
+`alias.Function(...)` calls. Run mode records the same capabilities in
+`numadora.hostCall` events. Interactive input requires both target identity and
+explicit `allowInteractiveInput` approval; otherwise `slasher_input.Text` fails
+closed without sending text.
 
 ## Runtime Boundary
 

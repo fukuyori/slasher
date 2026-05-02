@@ -74,6 +74,7 @@ public sealed partial class ScriptRunService
                 request.StopOnError,
                 request.CapturePolicy,
                 request.Purpose,
+                request.AllowInteractiveInput,
                 cancellationToken);
         }
 
@@ -115,6 +116,7 @@ public sealed partial class ScriptRunService
                 request.StopOnError,
                 request.CapturePolicy,
                 request.Purpose,
+                request.AllowInteractiveInput,
                 cancellationToken);
         }
 

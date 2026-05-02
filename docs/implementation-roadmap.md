@@ -186,6 +186,13 @@ stable.
 - [x] Initial Numadora run lineage metadata and policy input capture
 - [x] Initial Numadora in-process policy decision capture
 - [x] Numadora policy evaluator allow/deny tests
+- [x] First policy-gated Numadora observe host calls
+- [x] First policy-gated Numadora process/app host call
+- [x] Numadora policy target identity input and missing-target deny
+- [x] Policy-gated Numadora window focus host call
+- [x] Numadora text input host call reaches policy-denied event path
+- [x] Explicit Numadora interactive input approval flag
+- [x] Web UI and MCP opt-in for Numadora interactive input approval
 - [ ] `.numa` check/run support
 - [ ] Security policy gates for Numadora host bindings
 - [ ] Important `.slasher` samples ported to `.numa`

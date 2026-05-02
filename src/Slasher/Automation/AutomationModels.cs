@@ -38,7 +38,8 @@ public sealed record ScriptRunRequest(
     bool StopOnError = true,
     CapturePolicy? CapturePolicy = null,
     string? Language = null,
-    string? Purpose = null);
+    string? Purpose = null,
+    bool AllowInteractiveInput = false);
 
 public sealed record ScriptFileRunRequest(
     string Path,
@@ -46,7 +47,8 @@ public sealed record ScriptFileRunRequest(
     bool StopOnError = true,
     CapturePolicy? CapturePolicy = null,
     string? Language = null,
-    string? Purpose = null);
+    string? Purpose = null,
+    bool AllowInteractiveInput = false);
 
 public sealed record ScriptCheckRequest(
     string? Script = null,
@@ -92,7 +94,9 @@ public sealed record NumadoraPolicyInput(
     string Surface,
     ScriptCapabilityRequirement? Capability,
     NumadoraPolicyHostCall HostCall,
-    IReadOnlyDictionary<string, object?> Lineage);
+    IReadOnlyDictionary<string, object?> Lineage,
+    AutomationTarget? Target = null,
+    IReadOnlyDictionary<string, object?>? Approvals = null);
 
 public sealed record NumadoraPolicyHostCall(
     string Module,
