@@ -106,9 +106,30 @@ public sealed partial class ScriptRunService
 
         var inlineRoot = Path.Combine(_workspaceRoot, ".numadora-targets", "inline");
         Directory.CreateDirectory(inlineRoot);
+        await CopyNumadoraInlineBindingsAsync(inlineRoot, cancellationToken);
         var path = Path.Combine(inlineRoot, $"inline-{Guid.NewGuid():N}.numa");
         await File.WriteAllTextAsync(path, request.Script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
         return (path, true);
+    }
+
+    private async Task CopyNumadoraInlineBindingsAsync(string inlineRoot, CancellationToken cancellationToken)
+    {
+        var bindingsRoot = Path.Combine(_workspaceRoot, "scripts", "numadora-samples");
+        if (!Directory.Exists(bindingsRoot))
+        {
+            return;
+        }
+
+        foreach (var bindingPath in Directory.EnumerateFiles(bindingsRoot, "slasher_*.numa"))
+        {
+            var destination = Path.Combine(inlineRoot, Path.GetFileName(bindingPath));
+            var source = await File.ReadAllTextAsync(bindingPath, cancellationToken);
+            await File.WriteAllTextAsync(
+                destination,
+                source,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                cancellationToken);
+        }
     }
 
     private static string? ResolveNumadoraHome()
@@ -139,6 +160,8 @@ public sealed partial class ScriptRunService
             WorkingDirectory = numadoraHome,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true
         };

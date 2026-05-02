@@ -65,6 +65,7 @@ prototype can import directly:
 | element | `slasher_element` |
 | browser | `slasher_browser` |
 | logging/steps/wait | `slasher_io` |
+| message boxes | `slasher_dialog` |
 | assertions | `slasher_test` |
 
 Future Numadora module-path support may allow names such as `slasher/app`, but

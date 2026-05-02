@@ -11,6 +11,10 @@ internal static partial class NativeMethods
     internal const int SwRestore = 9;
     internal const int SwMaximize = 3;
 
+    internal const uint MbOk = 0x00000000;
+    internal const uint MbIconInformation = 0x00000040;
+    internal const uint MbTopmost = 0x00040000;
+
     internal const uint WmClose = 0x0010;
     internal const uint InputKeyboard = 1;
     internal const uint InputMouse = 0;

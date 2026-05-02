@@ -1,0 +1,5 @@
+IMPORT slasher_dialog AS dialog
+
+FUNC main()
+    dialog.Message("Numadoraからのメッセージです。", "Slasher")
+END

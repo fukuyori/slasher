@@ -156,6 +156,33 @@ public sealed class NumadoraPolicyEvaluatorTests
     }
 
     [Fact]
+    public void Evaluate_DeniesDialogDisplayWithoutExplicitApproval()
+    {
+        var decision = _evaluator.Evaluate(
+            CreateInput(Capability("slasher_dialog", "Message", "UI/dialog", "interactive")));
+
+        Assert.False(decision.Allow);
+        Assert.Equal("numadora_policy_interactive_input_not_approved", decision.Code);
+    }
+
+    [Theory]
+    [InlineData("Message")]
+    [InlineData("Alert")]
+    public void Evaluate_AllowsDialogDisplayWithExplicitApproval(string function)
+    {
+        var decision = _evaluator.Evaluate(
+            CreateInput(
+                Capability("slasher_dialog", function, "UI/dialog", "interactive"),
+                approvals: new Dictionary<string, object?>
+                {
+                    ["interactiveInput"] = true,
+                }));
+
+        Assert.True(decision.Allow);
+        Assert.Equal("numadora_policy_allowed_interactive_input", decision.Code);
+    }
+
+    [Fact]
     public void Evaluate_AllowsAppStartWithProcessAuditPolicy()
     {
         var decision = _evaluator.Evaluate(

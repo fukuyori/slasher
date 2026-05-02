@@ -46,6 +46,13 @@ public static partial class SlasherEndpointExtensions
                 : Results.Ok(window);
         });
 
+        app.MapPost("/windows/message-box", (MessageBoxRequest request, WindowsAutomationService automation) =>
+        {
+            return automation.ShowMessageBox(request, out var response, out var error)
+                ? Results.Ok(response)
+                : Results.BadRequest(error);
+        });
+
         app.MapPost("/windows/close-all", (CloseAllWindowsRequest request, WindowsAutomationService automation) =>
         {
             return Results.Ok(new { closed = automation.CloseAllWindows(request) });

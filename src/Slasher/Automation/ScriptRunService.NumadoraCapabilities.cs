@@ -178,6 +178,18 @@ public sealed partial class ScriptRunService
                 "Observe",
                 "observe",
                 "Waits without issuing GUI input."),
+            [CapabilityKey("slasher_dialog", "Message")] = new(
+                "slasher_dialog",
+                "Message",
+                "UI/dialog",
+                "interactive",
+                "Shows a local message box and records the selected button."),
+            [CapabilityKey("slasher_dialog", "Alert")] = new(
+                "slasher_dialog",
+                "Alert",
+                "UI/dialog",
+                "interactive",
+                "Shows a local message box with the default Slasher title."),
             [CapabilityKey("slasher_test", "AssertForegroundTitle")] = new(
                 "slasher_test",
                 "AssertForegroundTitle",

@@ -89,7 +89,9 @@ scripts/
     slasher_element.numa
     slasher_browser.numa
     slasher_io.numa
+    slasher_dialog.numa
     slasher_test.numa
+    message-box.numa
 ```
 
 `numadora-bindings/slasher/` contains design notes for future host bindings.
@@ -341,6 +343,8 @@ Verified on the local Numadora 0.0.1 checkout:
   works.
 - `scripts\numadora-samples\notepad-check.numa` checks successfully after
   adapting the sample to current Numadora syntax.
+- `scripts\numadora-samples\message-box.numa` checks successfully and requires
+  `AllowInteractiveInput=true` when run because it displays a local dialog.
 
 Former blocker:
 

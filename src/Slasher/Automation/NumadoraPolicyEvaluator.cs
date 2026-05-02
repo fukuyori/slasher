@@ -61,6 +61,14 @@ public sealed class NumadoraPolicyEvaluator
                 : Deny("numadora_policy_interactive_input_not_approved", "Interactive input requires explicit approval.");
         }
 
+        if (input.Capability.Module.Equals("slasher_dialog", StringComparison.OrdinalIgnoreCase)
+            && IsApprovedDialogFunction(input.Capability.Function))
+        {
+            return HasApproval(input, "interactiveInput")
+                ? Allow("numadora_policy_allowed_interactive_input", $"{input.Capability.Module}.{input.Capability.Function} is allowed by explicit interactive input approval.")
+                : Deny("numadora_policy_interactive_input_not_approved", "Interactive dialog display requires explicit approval.");
+        }
+
         return Deny("numadora_policy_profile_blocked", $"Profile '{input.Capability.Profile}' is not enabled for execution.");
     }
 
@@ -95,6 +103,12 @@ public sealed class NumadoraPolicyEvaluator
             || function.Equals("Wheel", StringComparison.OrdinalIgnoreCase)
             || function.Equals("Drag", StringComparison.OrdinalIgnoreCase)
             || function.Equals("ContextMenu", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsApprovedDialogFunction(string function)
+    {
+        return function.Equals("Message", StringComparison.OrdinalIgnoreCase)
+            || function.Equals("Alert", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasApproval(NumadoraPolicyInput input, string name)

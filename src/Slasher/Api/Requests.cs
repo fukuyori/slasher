@@ -142,6 +142,8 @@ public sealed record MouseDragRequest(
 
 public sealed record ContextMenuRequest(int X, int Y, int DelayMs = 250);
 
+public sealed record MessageBoxRequest(string Text, string? Title = null);
+
 public sealed record ScreenshotRequest(
     string? Handle = null,
     bool IncludeCursor = false,
@@ -262,6 +264,8 @@ public sealed record ContextMenuResponse(
     WindowInfo? ForegroundWindow,
     ScreenshotResponse Screenshot,
     string Observation);
+
+public sealed record MessageBoxResponse(string Title, string Text, int Button);
 
 public sealed record ElementTreeResponse(
     WindowElementInfo Root,

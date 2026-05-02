@@ -1,0 +1,26 @@
+IMPORT slasher_dialog AS dialog
+
+FUNC Moves(n: Int, from: String, to: String, work: String) -> Array<String>
+    VAR lines: Array<String> := []
+
+    IF n <= 0 THEN
+        RETURN lines
+    END
+
+    FOR line IN Moves(n - 1, from, work, to) DO
+        lines := Push(lines, line)
+    END
+
+    lines := Push(lines, from + " -> " + to)
+
+    FOR line IN Moves(n - 1, work, to, from) DO
+        lines := Push(lines, line)
+    END
+
+    RETURN lines
+END
+
+FUNC main()
+    LET result := Join(Moves(3, "A", "C", "B"), "\\n")
+    dialog.Message(result, "Hanoi")
+END

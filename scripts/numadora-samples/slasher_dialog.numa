@@ -1,0 +1,11 @@
+MODULE slasher_dialog
+    EXPORT Message, Alert
+
+    FUNC Message(text: String, title: String)
+        Print("__SLASHER_HOST_CALL__ slasher_dialog.Message " + title + "	" + text)
+    END
+
+    FUNC Alert(text: String)
+        Print("__SLASHER_HOST_CALL__ slasher_dialog.Alert " + text)
+    END
+END

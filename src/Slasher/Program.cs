@@ -3,8 +3,9 @@ using Slasher.Automation;
 using Slasher.Files;
 using Slasher.Windows;
 
+var workspaceRoot = ResolveWorkspaceRoot();
 var outputWebRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-var sourceWebRoot = Path.Combine(Directory.GetCurrentDirectory(), "src", "Slasher", "wwwroot");
+var sourceWebRoot = Path.Combine(workspaceRoot, "src", "Slasher", "wwwroot");
 var webRootPath = Directory.Exists(outputWebRoot)
     ? outputWebRoot
     : Directory.Exists(sourceWebRoot)
@@ -14,6 +15,7 @@ var webRootPath = Directory.Exists(outputWebRoot)
 var builderOptions = new WebApplicationOptions
 {
     Args = args,
+    ContentRootPath = workspaceRoot,
     WebRootPath = webRootPath
 };
 
@@ -59,3 +61,24 @@ app.Use(async (context, next) =>
 app.MapSlasherEndpoints();
 
 app.Run();
+
+static string ResolveWorkspaceRoot()
+{
+    var currentDirectory = Directory.GetCurrentDirectory();
+    foreach (var start in new[] { currentDirectory, AppContext.BaseDirectory })
+    {
+        var directory = new DirectoryInfo(start);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "src", "Slasher", "Slasher.csproj"))
+                && Directory.Exists(Path.Combine(directory.FullName, "scripts")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+    }
+
+    return currentDirectory;
+}

@@ -417,6 +417,7 @@ public sealed class ScriptRunServiceTests : IDisposable
             IMPORT slasher_element AS element
             IMPORT slasher_browser AS browser
             IMPORT slasher_io AS io
+            IMPORT slasher_dialog AS dialog
             IMPORT slasher_test AS test
 
             FUNC main()
@@ -444,6 +445,7 @@ public sealed class ScriptRunServiceTests : IDisposable
                 browser.Screenshot("-")
                 browser.Links("-")
                 browser.Windows("-")
+                dialog.Message("hello", "Slasher")
                 test.AssertForegroundTitle("contains", title)
             END
             """);
@@ -534,6 +536,35 @@ public sealed class ScriptRunServiceTests : IDisposable
             && item.Function == "AssertForegroundTitle"
             && item.CapabilityClass == "Observe"
             && item.Profile == "observe");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_dialog"
+            && item.Function == "Message"
+            && item.CapabilityClass == "UI/dialog"
+            && item.Profile == "interactive");
+    }
+
+    [Fact]
+    public async Task CheckAsync_InlineNumadoraCanImportSlasherBindings()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts", "numadora-samples");
+        Directory.CreateDirectory(scripts);
+        await WriteNumadoraStubModulesAsync(scripts);
+
+        var response = await _service.CheckAsync(new ScriptCheckRequest(
+            """
+            IMPORT slasher_dialog AS dialog
+
+            FUNC main()
+                dialog.Message("hello", "Slasher")
+            END
+            """,
+            Language: "numadora"),
+            CancellationToken.None);
+
+        Assert.True(response.Ok, AssertDiagnostics(response.Diagnostics));
+        Assert.Contains(response.RequiredCapabilities ?? [], item =>
+            item.Module == "slasher_dialog"
+            && item.Function == "Message");
     }
 
     [Fact]
@@ -1274,6 +1305,20 @@ public sealed class ScriptRunServiceTests : IDisposable
 
                 FUNC Wait(ms: Int)
                     Print("__SLASHER_HOST_CALL__ slasher_io.Wait " + ToString(ms))
+                END
+            END
+            """);
+        await File.WriteAllTextAsync(Path.Combine(directory, "slasher_dialog.numa"),
+            """
+            MODULE slasher_dialog
+                EXPORT Message, Alert
+
+                FUNC Message(text: String, title: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_dialog.Message " + title + "	" + text)
+                END
+
+                FUNC Alert(text: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_dialog.Alert " + text)
                 END
             END
             """);

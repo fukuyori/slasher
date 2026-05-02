@@ -376,7 +376,7 @@ public sealed partial class ScriptRunService
             ["diagnostics"] = diagnostics,
             ["requiredCapabilities"] = requiredCapabilities,
             ["blockedCapabilities"] = blockedCapabilities,
-            ["allowedLocalModules"] = new[] { "slasher_app", "slasher_window", "slasher_input", "slasher_screen", "slasher_element", "slasher_browser", "slasher_io", "slasher_test" },
+            ["allowedLocalModules"] = new[] { "slasher_app", "slasher_window", "slasher_input", "slasher_screen", "slasher_element", "slasher_browser", "slasher_io", "slasher_dialog", "slasher_test" },
             ["allowedLocalHostCalls"] = new[]
             {
                 "slasher_app.Start",
@@ -402,6 +402,8 @@ public sealed partial class ScriptRunService
                 "slasher_browser.Links",
                 "slasher_browser.Windows",
                 "slasher_io.*",
+                "slasher_dialog.Message",
+                "slasher_dialog.Alert",
                 "slasher_window.WaitForTitle",
                 "slasher_test.AssertForegroundTitle"
             },
@@ -436,6 +438,9 @@ public sealed partial class ScriptRunService
                     || item.Function.Equals("Wheel", StringComparison.OrdinalIgnoreCase)
                     || item.Function.Equals("Drag", StringComparison.OrdinalIgnoreCase)
                     || item.Function.Equals("ContextMenu", StringComparison.OrdinalIgnoreCase)))
+            || (item.Module.Equals("slasher_dialog", StringComparison.OrdinalIgnoreCase)
+                && (item.Function.Equals("Message", StringComparison.OrdinalIgnoreCase)
+                    || item.Function.Equals("Alert", StringComparison.OrdinalIgnoreCase)))
             || (item.CapabilityClass.Equals("Observe", StringComparison.OrdinalIgnoreCase)
                 && item.Profile.Equals("observe", StringComparison.OrdinalIgnoreCase));
     }
@@ -560,6 +565,8 @@ public sealed partial class ScriptRunService
             "browser.Screenshot" => ("slasher_browser", "Screenshot"),
             "browser.Links" => ("slasher_browser", "Links"),
             "browser.Windows" => ("slasher_browser", "Windows"),
+            "dialog.Message" => ("slasher_dialog", "Message"),
+            "dialog.Alert" => ("slasher_dialog", "Alert"),
             "test.AssertForegroundTitle" => ("slasher_test", "AssertForegroundTitle"),
             "step" => ("slasher_io", "Step"),
             "wait" => ("slasher_io", "Wait"),
