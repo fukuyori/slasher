@@ -30,45 +30,10 @@ public sealed partial class ScriptRunService
             });
         }
 
-        if (hostCall.Module.Equals("slasher_dialog", StringComparison.OrdinalIgnoreCase)
-            && (hostCall.Function.Equals("Message", StringComparison.OrdinalIgnoreCase)
-                || hostCall.Function.Equals("Alert", StringComparison.OrdinalIgnoreCase)))
+        var dialogResult = ExecuteNumadoraDialogHostCall(hostCall, policyDecision);
+        if (dialogResult is not null)
         {
-            var dialog = ParseNumadoraDialogArgs(hostCall);
-            if (string.IsNullOrWhiteSpace(dialog.Text))
-            {
-                return NumadoraLocalHostCallResult.Failed(
-                    "numadora_host_call_invalid_arguments",
-                    $"{hostCall.Module}.{hostCall.Function} requires message text.",
-                    executedBy: "slasher-dialog");
-            }
-
-            if (!_automation.ShowMessageBox(
-                new MessageBoxRequest(dialog.Text, dialog.Title),
-                out var response,
-                out var error)
-                || response is null)
-            {
-                return NumadoraLocalHostCallResult.Failed(
-                    error?.Code ?? "message_box_failed",
-                    error?.Message ?? "Failed to show message box.",
-                    executedBy: "slasher-dialog",
-                    expected: new { shown = true, dialog.Title, dialog.Text },
-                    actual: new { shown = false });
-            }
-
-            return NumadoraLocalHostCallResult.Passed(
-                new
-                {
-                    shown = true,
-                    response.Title,
-                    response.Text,
-                    response.Button,
-                    executedBy = "slasher-dialog",
-                    policyAllowed = true,
-                    policyCode = policyDecision.Code
-                },
-                executedBy: "slasher-dialog");
+            return dialogResult;
         }
 
         if (hostCall.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
@@ -1059,28 +1024,6 @@ public sealed partial class ScriptRunService
         return new NumadoraCaptureArgs(tokens[0].ToLowerInvariant(), maxWidth, maxHeight);
     }
 
-    private static NumadoraDialogArgs ParseNumadoraDialogArgs(NumadoraHostCall hostCall)
-    {
-        var raw = string.Join(' ', hostCall.Arguments).Trim();
-        if (hostCall.Function.Equals("Alert", StringComparison.OrdinalIgnoreCase))
-        {
-            return new NumadoraDialogArgs(DecodeNumadoraDialogText(raw), "Slasher");
-        }
-
-        var parts = raw.Split('\t', 2);
-        return parts.Length == 2
-            ? new NumadoraDialogArgs(DecodeNumadoraDialogText(parts[1].Trim()), DecodeNumadoraDialogText(parts[0].Trim()))
-            : new NumadoraDialogArgs(DecodeNumadoraDialogText(raw), "Slasher");
-    }
-
-    private static string DecodeNumadoraDialogText(string value)
-    {
-        return value
-            .Replace("\\r\\n", "\r\n", StringComparison.Ordinal)
-            .Replace("\\n", "\n", StringComparison.Ordinal)
-            .Replace("\\t", "\t", StringComparison.Ordinal);
-    }
-
     private static NumadoraElementTreeArgs? ParseNumadoraElementTreeArgs(IReadOnlyList<string> args)
     {
         var tokens = SplitNumadoraArgs(args);
@@ -1292,8 +1235,6 @@ public sealed partial class ScriptRunService
     private readonly record struct NumadoraContextMenuArgs(int X, int Y, int DelayMs);
 
     private readonly record struct NumadoraCaptureArgs(string Scope, int MaxWidth, int MaxHeight);
-
-    private readonly record struct NumadoraDialogArgs(string Text, string Title);
 
     private readonly record struct NumadoraElementTreeArgs(string Scope, int MaxDepth, int MaxChildren);
 
