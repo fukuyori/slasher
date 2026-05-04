@@ -344,7 +344,8 @@ Verified on the local Numadora 0.0.1 checkout:
 - `scripts\numadora-samples\notepad-check.numa` checks successfully after
   adapting the sample to current Numadora syntax.
 - `scripts\numadora-samples\message-box.numa` checks successfully and requires
-  `AllowInteractiveInput=true` when run because it displays a local dialog.
+  `AllowInteractiveInput=true` when run because it displays a local dialog. In
+  the web UI, this approval is the `Interactive` checkbox.
 
 Former blocker:
 

@@ -108,6 +108,10 @@ run mode than in check mode. They require target identity and explicit
 `allowInteractiveInput` approval before Slasher sends input to the foreground
 application.
 
+In the web UI this approval is shown as the `Interactive` checkbox. Numadora
+dialog bindings such as `slasher_dialog.Message(...)` use the same explicit
+approval before displaying a local message box.
+
 This is intentionally different from the v1 `.slasher` command style:
 
 ```text

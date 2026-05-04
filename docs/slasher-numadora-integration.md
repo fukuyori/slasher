@@ -99,12 +99,14 @@ catalog maps known Numadora-facing calls to the security classes in
 `/scripts/check` reports these as `requiredCapabilities` for `.numa` scripts
 when it can statically recognize `IMPORT module AS alias` plus
 `alias.Function(...)` calls. Run mode records the same capabilities in
-`numadora.hostCall` events. Interactive input requires both target identity and
-explicit `allowInteractiveInput` approval; otherwise `slasher_input.Text`,
+`numadora.hostCall` events. Interactive actions require explicit
+`allowInteractiveInput` approval; the web UI presents this as `Interactive`.
+Input actions also require target identity. Without approval, `slasher_input.Text`,
 `slasher_input.Keys`, `slasher_input.Mouse`, `slasher_input.Wheel`, and
 `slasher_input.Drag`, and `slasher_input.ContextMenu` fail closed without
 sending input. Approved input revalidates the foreground target immediately
-before sending.
+before sending. Dialog actions such as `slasher_dialog.Message` fail closed
+without the same approval before displaying a local message box.
 
 ## Runtime Boundary
 

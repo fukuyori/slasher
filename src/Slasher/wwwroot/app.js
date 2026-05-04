@@ -18,8 +18,31 @@ set message "hello from Slasher script"
 text "hello from Slasher script"
 text "\${message}"
 capture selected`;
-const numadoraSampleScript = `FUNC main()
-    Print("hello from Slasher Numadora check")
+const numadoraSampleScript = `IMPORT slasher_dialog AS dialog
+
+FUNC Moves(n: Int, from: String, to: String, work: String) -> Array<String>
+    VAR lines: Array<String> := []
+
+    IF n <= 0 THEN
+        RETURN lines
+    END
+
+    FOR line IN Moves(n - 1, from, work, to) DO
+        lines := Push(lines, line)
+    END
+
+    lines := Push(lines, from + " -> " + to)
+
+    FOR line IN Moves(n - 1, work, to, from) DO
+        lines := Push(lines, line)
+    END
+
+    RETURN lines
+END
+
+FUNC main()
+    LET result := Join(Moves(3, "A", "C", "B"), "\\n")
+    dialog.Message(result, "Hanoi")
 END`;
 
 function log(message, payload) {
@@ -2065,9 +2088,12 @@ function bind() {
   });
   $("script-save").addEventListener("click", saveScript);
   $("script-load-sample").addEventListener("click", () => {
-    $("script-input").value = $("script-language").value === "numadora"
-      ? numadoraSampleScript
-      : sampleScript;
+    const isNumadora = $("script-language").value === "numadora";
+    $("script-input").value = isNumadora ? numadoraSampleScript : sampleScript;
+    if (isNumadora) {
+      $("script-allow-input").checked = true;
+    }
+
     log("Loaded sample script");
   });
   $("script-clear").addEventListener("click", () => {
