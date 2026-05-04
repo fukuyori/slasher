@@ -888,6 +888,13 @@ function renderDiagnostics(details) {
     }
   }
 
+  if (requiresInteractiveApproval(details)) {
+    const item = document.createElement("div");
+    item.className = "diagnostic warning";
+    item.textContent = "Enable Interactive before running this Numadora script.";
+    panel.appendChild(item);
+  }
+
   if (details?.runMode) {
     const meta = document.createElement("div");
     meta.className = "diagnostic-windows";
@@ -929,6 +936,20 @@ function formatHostCall(call) {
 
 function formatPolicyDecision(decision) {
   return `${decision.allow ? "allow" : "deny"}:${decision.code || "policy"} ${decision.reason || ""}`.trim();
+}
+
+function requiresInteractiveApproval(details) {
+  const policyDecisions = details?.policyDecisions || [];
+  const directDecision = policyDecisions.some((decision) =>
+    !decision.allow && decision.code === "numadora_policy_interactive_input_not_approved");
+  if (directDecision) {
+    return true;
+  }
+
+  return (details?.hostCalls || []).some((call) =>
+    call.policyDecision
+    && !call.policyDecision.allow
+    && call.policyDecision.code === "numadora_policy_interactive_input_not_approved");
 }
 
 function formatDiagnosticWindow(window) {
