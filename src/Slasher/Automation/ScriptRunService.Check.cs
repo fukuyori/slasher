@@ -6,40 +6,21 @@ public sealed partial class ScriptRunService
 {
     public async Task<ScriptCheckResponse> CheckAsync(ScriptCheckRequest request, CancellationToken cancellationToken)
     {
-        if (IsNumadoraCheck(request))
+        if (IsRemovedSlasherScript(request.Language, request.Path))
         {
-            return await CheckNumadoraAsync(request, cancellationToken);
+            return RemovedSlasherCheckResponse();
         }
 
-        var diagnostics = new List<ScriptDiagnostic>();
-        IReadOnlyList<ScriptLine> lines = [];
-
-        try
-        {
-            lines = await ParseCheckLinesAsync(request, cancellationToken);
-            diagnostics.AddRange(ValidateScriptStructure(lines));
-        }
-        catch (ScriptCommandException ex)
-        {
-            diagnostics.Add(ToDiagnostic(ex));
-        }
-
-        return new ScriptCheckResponse(
-            diagnostics.Count == 0,
-            diagnostics,
-            lines.Select(ToCheckLine).ToArray());
+        return await CheckNumadoraAsync(request with { Language = "numadora" }, cancellationToken);
     }
 
-    private static bool IsNumadoraCheck(ScriptCheckRequest request)
+    private static ScriptCheckResponse RemovedSlasherCheckResponse()
     {
-        if (request.Language?.Equals("numadora", StringComparison.OrdinalIgnoreCase) == true
-            || request.Language?.Equals("numa", StringComparison.OrdinalIgnoreCase) == true)
-        {
-            return true;
-        }
-
-        return !string.IsNullOrWhiteSpace(request.Path)
-            && Path.GetExtension(request.Path).Equals(".numa", StringComparison.OrdinalIgnoreCase);
+        return new ScriptCheckResponse(
+            false,
+            [RemovedSlasherDiagnostic()],
+            [],
+            "numadora");
     }
 
     private async Task<IReadOnlyList<ScriptLine>> ParseCheckLinesAsync(

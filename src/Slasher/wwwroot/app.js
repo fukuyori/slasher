@@ -9,15 +9,8 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
-const sampleScript = `# One command per line.
-# Blank lines and lines starting with # are skipped.
-start notepad.exe
-wait 800
-app select notepad as app
-set message "hello from Slasher script"
-text "hello from Slasher script"
-text "\${message}"
-capture selected`;
+const scriptLanguage = "numadora";
+const scriptStorageKey = "slasher.numadoraScript";
 const numadoraSampleScript = `IMPORT slasher_dialog AS dialog
 
 FUNC Moves(n: Int, from: String, to: String, work: String) -> Array<String>
@@ -448,26 +441,25 @@ function setScriptRunning(running) {
 }
 
 function updateScriptLanguageState() {
-  const isNumadora = $("script-language").value === "numadora";
-  $("script-allow-input").disabled = state.scriptRunning || !isNumadora;
-  if (!isNumadora) {
-    $("script-allow-input").checked = false;
-  }
-
+  $("script-allow-input").disabled = state.scriptRunning;
   $("script-run").disabled = state.scriptRunning;
   $("script-status-text").textContent = state.scriptRunning ? "running" : "idle";
 }
 
 function saveScript() {
-  localStorage.setItem("slasher.script", $("script-input").value);
+  localStorage.setItem(scriptStorageKey, $("script-input").value);
   log("Saved script in this browser");
 }
 
 function loadSavedScript() {
-  const saved = localStorage.getItem("slasher.script");
+  const saved = localStorage.getItem(scriptStorageKey);
   if (saved !== null) {
     $("script-input").value = saved;
+    return;
   }
+
+  $("script-input").value = numadoraSampleScript;
+  $("script-allow-input").checked = true;
 }
 
 async function runScript() {
@@ -475,7 +467,7 @@ async function runScript() {
     return;
   }
 
-  const language = $("script-language").value;
+  const language = scriptLanguage;
   const script = $("script-input").value;
   if (scriptLines(script).length === 0) {
     log("Script is empty");
@@ -488,7 +480,7 @@ async function runScript() {
   log(`${language} script started`);
 
   try {
-    const allowInteractiveInput = language === "numadora" && $("script-allow-input").checked;
+    const allowInteractiveInput = $("script-allow-input").checked;
     const response = await api("/scripts/run", {
       method: "POST",
       body: JSON.stringify({ script, language, purpose: "web-ui-script", allowInteractiveInput }),
@@ -531,7 +523,7 @@ async function checkScript() {
       method: "POST",
       body: JSON.stringify({
         script,
-        language: $("script-language").value
+        language: scriptLanguage
       })
     });
     log(`${response.language || "slasher"} check passed (${response.lines.length} lines)`, {
@@ -2101,7 +2093,6 @@ function bind() {
 
   $("script-run").addEventListener("click", () => runScript());
   $("script-check").addEventListener("click", () => checkScript());
-  $("script-language").addEventListener("change", updateScriptLanguageState);
   $("script-stop").addEventListener("click", () => {
     state.stopScript = true;
     state.scriptAbortController?.abort();
@@ -2109,12 +2100,8 @@ function bind() {
   });
   $("script-save").addEventListener("click", saveScript);
   $("script-load-sample").addEventListener("click", () => {
-    const isNumadora = $("script-language").value === "numadora";
-    $("script-input").value = isNumadora ? numadoraSampleScript : sampleScript;
-    if (isNumadora) {
-      $("script-allow-input").checked = true;
-    }
-
+    $("script-input").value = numadoraSampleScript;
+    $("script-allow-input").checked = true;
     log("Loaded sample script");
   });
   $("script-clear").addEventListener("click", () => {

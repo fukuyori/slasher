@@ -183,6 +183,17 @@ h3 {
   resize: vertical;
 }
 
+.script-language-label {
+  background: #eef4f8;
+  border: 1px solid #d5e1e8;
+  border-radius: 6px;
+  color: #334653;
+  display: inline-flex;
+  font-size: 13px;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
 .script-status {
   color: #4f6070;
   font-size: 13px;

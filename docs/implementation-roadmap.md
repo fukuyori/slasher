@@ -33,8 +33,8 @@ top of the completed evidence model.
 2. Script actions should be libraries, not syntax bloat.
    New command shapes should map to Numadora modules. Current examples should
    use names accepted by the existing Numadora implementation, such as
-   `slasher_csv` or `slasher_browser`. Existing `.slasher` commands are
-   temporary.
+   `slasher_csv` or `slasher_browser`. Legacy `.slasher` commands are no longer
+   part of the active script surface.
 
 3. Web UI, MCP, HTTP, and scripts should share semantics.
    Avoid adding behavior in one control surface without the corresponding
@@ -129,8 +129,8 @@ Language direction:
 - Slasher scripts should use Numadora as the unified general-purpose language.
 - Windows automation should be exposed as Slasher-owned, Numadora-facing typed
   modules and host capabilities.
-- Slasher's current v1 `.slasher` runner is temporary during the transition.
-- The final script target is `.numa`; old `.slasher` scripts may stop working.
+- The v1 `.slasher` runner has been removed from the public script surface.
+- The active script target is `.numa`; old `.slasher` scripts are rejected.
 
 The old standalone Slasher Script compiler direction has been removed from the
 active docs. New language work should target Slasher scripts written in
@@ -140,7 +140,7 @@ Numadora:
   Slasher.
 - `numadora-language-spec.md` defines generic Numadora.
 - `slasher-numadora-integration.md` defines the Slasher server bindings.
-- `migration-from-slasher-v1.md` defines migration from `.slasher`.
+- `migration-from-slasher-v1.md` remains as historical porting reference.
 
 Near-term language work:
 
@@ -149,8 +149,8 @@ Near-term language work:
 3. Add current-spec Windows-control module stubs or host bindings for the first
    useful modules.
 4. Add `.numa` check/run support.
-5. Port important `.slasher` samples to `.numa`.
-6. Remove or archive v1 runner once `.numa` covers the core loop.
+5. Port any still-useful historical samples to `.numa`.
+6. Keep public script execution Numadora-only.
 
 Security work should run in parallel with N1/N2 so Numadora host bindings can
 carry capability metadata from the beginning.
@@ -201,7 +201,7 @@ stable.
 - [x] Numadora screen capture observe bridge
 - [x] Numadora native element observe bridges
 - [x] Numadora browser observe bridges
-- [ ] `.numa` check/run support
-- [ ] Security policy gates for Numadora host bindings
-- [ ] Important `.slasher` samples ported to `.numa`
-- [ ] v1 runner removed or archived
+- [x] `.numa` check/run support
+- [x] Security policy gates for Numadora host bindings
+- [x] Legacy `.slasher` samples removed from active scripts
+- [x] v1 runner removed from public script entry points

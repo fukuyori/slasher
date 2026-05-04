@@ -65,6 +65,16 @@ public sealed partial class ScriptRunService
             return new ScriptRunResponse(false, state.Report, state.Events, state.FinalError);
         }
 
+        if (IsRemovedSlasherScript(request.Language, request.Path))
+        {
+            var report = _artifacts.StartRun(
+                name,
+                AutomationRunMode.Script,
+                sourceFile,
+                request.CapturePolicy);
+            return await FailRemovedSlasherRunAsync(report, request.StopOnError, cancellationToken);
+        }
+
         if (IsNumadoraRun(request.Language, request.Path))
         {
             return await RunNumadoraPreflightAsync(
@@ -107,6 +117,16 @@ public sealed partial class ScriptRunService
 
     public async Task<ScriptRunResponse> RunAsync(ScriptRunRequest request, CancellationToken cancellationToken)
     {
+        if (IsRemovedSlasherScript(request.Language, null))
+        {
+            var removedReport = _artifacts.StartRun(
+                string.IsNullOrWhiteSpace(request.Name) ? "script-run" : request.Name,
+                AutomationRunMode.Script,
+                "POST /scripts/run",
+                request.CapturePolicy);
+            return await FailRemovedSlasherRunAsync(removedReport, request.StopOnError, cancellationToken);
+        }
+
         if (IsNumadoraRun(request.Language, null))
         {
             return await RunNumadoraPreflightAsync(
@@ -156,14 +176,52 @@ public sealed partial class ScriptRunService
 
     private static bool IsNumadoraRun(string? language, string? path)
     {
-        if (language?.Equals("numadora", StringComparison.OrdinalIgnoreCase) == true
-            || language?.Equals("numa", StringComparison.OrdinalIgnoreCase) == true)
+        if (string.IsNullOrWhiteSpace(language)
+            || language.Equals("numadora", StringComparison.OrdinalIgnoreCase)
+            || language.Equals("numa", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
         return !string.IsNullOrWhiteSpace(path)
             && Path.GetExtension(path).Equals(".numa", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRemovedSlasherScript(string? language, string? path)
+    {
+        if (language?.Equals("slasher", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(path)
+            && Path.GetExtension(path).Equals(".slasher", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static ScriptDiagnostic RemovedSlasherDiagnostic()
+    {
+        return new ScriptDiagnostic(
+            "slasher_language_removed",
+            "The legacy Slasher script language has been removed. Use Numadora (.numa) scripts.");
+    }
+
+    private async Task<ScriptRunResponse> FailRemovedSlasherRunAsync(
+        AutomationRunReport report,
+        bool stopOnError,
+        CancellationToken cancellationToken)
+    {
+        var state = new ScriptExecutionState(report);
+        await RecordScriptErrorAsync(
+            new ScriptLine(1, 1, "legacy slasher script", report.EntryPoint ?? "legacy slasher script", null, []),
+            state,
+            new ScriptCommandException(
+                "slasher_language_removed",
+                "The legacy Slasher script language has been removed. Use Numadora (.numa) scripts.",
+                Recoverable: false),
+            stopOnError,
+            cancellationToken);
+        state.Report = _artifacts.CompleteRun(state.Report, AutomationRunStatus.Failed, state.FinalError, null);
+        return new ScriptRunResponse(false, state.Report, state.Events, state.FinalError);
     }
 }
 

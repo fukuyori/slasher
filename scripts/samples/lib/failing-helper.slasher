@@ -1,3 +1,0 @@
-# Helper script that intentionally fails for diagnostics smoke tests.
-test step "included failing helper"
-fail "intentional failure from included helper"

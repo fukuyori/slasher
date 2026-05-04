@@ -29,7 +29,7 @@ public sealed class ScriptRunServiceTests : IDisposable
             environment);
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task RunAsync_ExecutesVariablesArraysLoopsAndTryCatch()
     {
         var response = await _service.RunAsync(new ScriptRunRequest(
@@ -71,7 +71,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_workspaceRoot, response.Run.Artifacts.Events)));
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task RunAsync_ReturnsStructuredAssertionFailure()
     {
         var response = await _service.RunAsync(new ScriptRunRequest(
@@ -94,7 +94,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.NotNull(response.Error.Actual);
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task RunAsync_PreservesWindowsPathsInQuotedStrings()
     {
         var response = await _service.RunAsync(new ScriptRunRequest(
@@ -110,7 +110,7 @@ public sealed class ScriptRunServiceTests : IDisposable
             item.Logs.Any(log => log.Message == @"C:\Program Files\dotnet\dotnet.exe"));
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task RunAsync_RecordsAgentNotesAndAttachments()
     {
         var attachmentPath = Path.Combine(_workspaceRoot, "expected.txt");
@@ -160,7 +160,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.Contains("/artifacts/raw?path=", html);
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task ListRuns_ReturnsRecentCompletedRuns()
     {
         var first = await _service.RunAsync(new ScriptRunRequest(
@@ -187,7 +187,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.Contains(runs, item => item.RunId == second.Run.RunId);
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task RunAsync_ReportsMissingAttachmentWithSourceAndErrorScreenshot()
     {
         var response = await _service.RunAsync(new ScriptRunRequest(
@@ -207,7 +207,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.True(response.Error.Details.ContainsKey("diagnostics"));
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task RunAsync_CapturesBeforeAndAfterEachStepWhenPolicyRequestsIt()
     {
         var response = await _service.RunAsync(new ScriptRunRequest(
@@ -229,7 +229,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.All(logEvent.Evidence, item => Assert.True(File.Exists(Path.Combine(_workspaceRoot, item.Path))));
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task RunAsync_ReportsScreenContainsAsOcrPlaceholderWithEvidence()
     {
         var response = await _service.RunAsync(new ScriptRunRequest(
@@ -255,7 +255,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.Contains("0002-error-preview.bmp", html);
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task RunFileAsync_ReportsIncludedFileFunctionFailuresWithCallStack()
     {
         var scripts = Path.Combine(_workspaceRoot, "scripts");
@@ -296,7 +296,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.Null(frame!.Function);
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task CheckAsync_ReturnsParsedLinesWithoutExecutingScript()
     {
         var response = await _service.CheckAsync(new ScriptCheckRequest(
@@ -317,7 +317,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_workspaceRoot, "artifacts", "runs")));
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task CheckAsync_ReportsUnclosedBlocks()
     {
         var response = await _service.CheckAsync(new ScriptCheckRequest(
@@ -336,7 +336,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.Equal("if \"a\" == \"a\"", diagnostic.Command);
     }
 
-    [Fact]
+    [Fact(Skip = "Legacy Slasher script language has been removed.")]
     public async Task CheckAsync_CanParseScriptFileWithInclude()
     {
         var scripts = Path.Combine(_workspaceRoot, "scripts");
@@ -359,6 +359,49 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.Empty(response.Diagnostics);
         Assert.Contains(response.Lines, line => line.SourceFile == Path.Combine("scripts", "lib.slasher") && line.Function == "greet");
         Assert.Contains(response.Lines, line => line.SourceFile == Path.Combine("scripts", "main.slasher") && line.Command == "call greet world as result");
+    }
+
+    [Fact]
+    public async Task CheckAsync_DefaultsInlineScriptsToNumadora()
+    {
+        var response = await _service.CheckAsync(new ScriptCheckRequest(
+            """
+            FUNC main()
+                Print("hello from default Numadora")
+            END
+            """),
+            CancellationToken.None);
+
+        Assert.True(response.Ok, AssertDiagnostics(response.Diagnostics));
+        Assert.Equal("numadora", response.Language);
+    }
+
+    [Fact]
+    public async Task CheckAsync_RejectsLegacySlasherLanguage()
+    {
+        var response = await _service.CheckAsync(new ScriptCheckRequest(
+            "log \"old\"",
+            Language: "slasher"),
+            CancellationToken.None);
+
+        Assert.False(response.Ok);
+        var diagnostic = Assert.Single(response.Diagnostics);
+        Assert.Equal("slasher_language_removed", diagnostic.Code);
+        Assert.Equal("numadora", response.Language);
+    }
+
+    [Fact]
+    public async Task RunFileAsync_RejectsLegacySlasherFiles()
+    {
+        var scripts = Path.Combine(_workspaceRoot, "scripts");
+        Directory.CreateDirectory(scripts);
+        await File.WriteAllTextAsync(Path.Combine(scripts, "old.slasher"), "log \"old\"");
+
+        var response = await _service.RunFileAsync(new ScriptFileRunRequest(Path.Combine("scripts", "old.slasher")), CancellationToken.None);
+
+        Assert.False(response.Ok);
+        Assert.Equal("slasher_language_removed", response.Error?.Code);
+        Assert.Equal(AutomationRunStatus.Failed, response.Run.Status);
     }
 
     [Fact]

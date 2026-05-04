@@ -1,8 +1,8 @@
 # Numadora Integration And Migration Plan
 
-This plan describes how the Slasher application should use Numadora for broad
-Windows-control scripts while retiring the current v1 `.slasher` command
-runner.
+This plan describes how the Slasher application uses Numadora for broad
+Windows-control scripts after retiring the v1 `.slasher` command runner from
+public script entry points.
 
 It is an implementation plan, not a user migration guide. For user-facing
 syntax rewrites, see `migration-from-slasher-v1.md`.
@@ -25,8 +25,7 @@ For security rules that apply to Numadora host bindings, see
   `slasher_app`, `slasher_window`, `slasher_input`, `slasher_io`, and
   `slasher_test`.
 - Keep new RPA package work compatible with future Numadora module names.
-- Make it acceptable for v1 `.slasher` scripts to stop working after the
-  Numadora path is ready.
+- Reject v1 `.slasher` scripts from public script check/run APIs.
 - Provide migration tooling only if it materially speeds up porting important
   samples or user scripts.
 
@@ -398,14 +397,13 @@ runner when it no longer helps development.
 
 Switch stages:
 
-1. Experimental: `.numa` check/run hidden behind explicit language selection.
-2. Supported: docs recommend `.numa` for new scripts that use covered modules.
-3. Default-new: UI and templates create `.numa`.
-4. v1 frozen: no new features or fixes except emergency cleanup.
-5. v1 removed: `.slasher` endpoints, docs, and samples are deleted or archived.
+Current status:
 
-Do not remove v1 until `.numa` covers the core AI-driven testing loop:
-window/input, assertions, artifacts, element checks, and browser checks.
+1. `.numa` check/run is the public script path.
+2. UI and MCP script surfaces are Numadora-only.
+3. `.slasher` paths and `language=slasher` are rejected with
+   `slasher_language_removed`.
+4. Legacy `.slasher` samples have been removed from active scripts.
 
 ## Acceptance Matrix
 
@@ -427,7 +425,7 @@ window/input, assertions, artifacts, element checks, and browser checks.
 
 | Risk | Mitigation |
 |---|---|
-| Two languages confuse users | Keep `language-system.md` as the entry point and mark `.slasher` as temporary. |
+| Two languages confuse users | Keep `language-system.md` as the entry point and keep public script execution Numadora-only. |
 | Numadora integration blocks RPA work | Design Phase 12 APIs as Numadora modules first; port or remove v1 commands later. |
 | Diagnostics regress from v1 | Treat source line, action, error code, evidence, and report parity as acceptance criteria. |
 | Runtime bridge is too slow or fragile | Start with a process bridge, measure, then decide whether embedding is worth it. |

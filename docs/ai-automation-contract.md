@@ -131,7 +131,7 @@ Rules:
   "name": "notepad smoke",
   "status": "passed",
   "mode": "script",
-  "entryPoint": "examples/notepad.slasher",
+  "entryPoint": "scripts/numadora-samples/notepad-check.numa",
   "startedAt": "2026-04-28T10:15:30.000Z",
   "endedAt": "2026-04-28T10:15:34.200Z",
   "durationMs": 4200,
@@ -184,7 +184,7 @@ Each line in `events.jsonl` should be one JSON object.
   "step": "Type text",
   "action": "input.text",
   "source": {
-    "file": "examples/notepad.slasher",
+    "file": "scripts/numadora-samples/notepad-check.numa",
     "line": 8,
     "column": 3,
     "command": "input.text(message)"
@@ -296,18 +296,18 @@ Region target:
   "message": "No matching window was found.",
   "action": "app.select",
   "source": {
-    "file": "examples/notepad.slasher",
+    "file": "scripts/numadora-samples/notepad-check.numa",
     "line": 7,
     "column": 3,
     "command": "app.select(\"notepad\") as note",
     "function": "open notepad",
     "stack": [
       {
-        "file": "examples/main.slasher",
+        "file": "scripts/numadora-samples/main.numa",
         "line": 3,
         "column": 1,
         "function": "main setup",
-        "command": "include notepad.slasher"
+        "command": "IMPORT notepad_check AS sample"
       }
     ]
   },
@@ -680,7 +680,7 @@ Runtime variables:
 Variable scopes:
 
 - `global` variables are visible for the whole run, including included/imported files.
-- `file` variables are visible only to commands whose `source.file` is the same `.slasher` file.
+- Numadora source locations should point to `.numa` files when the runtime can provide them.
 - `local` variables are visible only within the current function call. Outside a function call, Phase A uses the active `step` / `test step` as the local scope key.
 - Reads resolve `local`, then `file`, then `global`.
 - Unqualified writes preserve compatibility: they write to the nearest existing variable scope, or to `global` when the variable is new.

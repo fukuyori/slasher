@@ -51,10 +51,7 @@
       <div class="panel-title">
         <h2>Script</h2>
         <div class="toolbar">
-          <select id="script-language" aria-label="Script language">
-            <option value="slasher">Slasher</option>
-            <option value="numadora">Numadora</option>
-          </select>
+          <span class="script-language-label">Numadora</span>
           <label class="checkbox" title="Allow Numadora scripts to show dialogs or send input">
             <input id="script-allow-input" type="checkbox" aria-label="Allow interactive Numadora actions">
             <span>Interactive</span>
@@ -67,13 +64,7 @@
           <button id="script-clear" type="button">Clear</button>
         </div>
       </div>
-      <textarea id="script-input" class="script-input" spellcheck="false" rows="9"># One command per line.
-# Blank lines and lines starting with # are skipped.
-start notepad.exe
-wait 800
-app select notepad
-text "hello from Slasher script"
-capture selected</textarea>
+      <textarea id="script-input" class="script-input" spellcheck="false" rows="9"></textarea>
       <div class="script-status">
         <span id="script-status-text">idle</span>
       </div>

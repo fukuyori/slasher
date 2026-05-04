@@ -64,7 +64,7 @@ or leak private information if misused.
    identity so accidental focus changes are visible after the run.
 
 9. Policy must be shared across surfaces.
-   Web UI, HTTP API, MCP tools, `.slasher`, and future `.numa` execution should
+   Web UI, HTTP API, MCP tools, and `.numa` execution should
    enforce the same safety categories and produce the same audit fields.
 
 10. Unsafe bypasses must be explicit.

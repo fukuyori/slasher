@@ -59,7 +59,7 @@ public sealed record ScriptCheckResponse(
     bool Ok,
     IReadOnlyList<ScriptDiagnostic> Diagnostics,
     IReadOnlyList<ScriptCheckLine> Lines,
-    string Language = "slasher",
+    string Language = "numadora",
     IReadOnlyList<ScriptCapabilityRequirement>? RequiredCapabilities = null);
 
 public sealed record ScriptDiagnostic(

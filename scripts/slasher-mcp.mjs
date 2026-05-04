@@ -684,12 +684,12 @@ const tools = [
   },
   {
     name: "slasher_check_script",
-    description: "Validate an inline Slasher or Numadora script without executing GUI actions. Use this before running generated or edited scripts.",
+    description: "Validate an inline Numadora script without executing GUI actions. Use this before running generated or edited scripts.",
     inputSchema: {
       type: "object",
       properties: {
         script: { type: "string" },
-        language: { type: "string", enum: ["slasher", "numadora", "numa"] }
+        language: { type: "string", enum: ["numadora", "numa"] }
       },
       required: ["script"],
       additionalProperties: false
@@ -697,12 +697,12 @@ const tools = [
   },
   {
     name: "slasher_check_script_file",
-    description: "Validate a .slasher or .numa script file inside the Slasher workspace without executing GUI actions.",
+    description: "Validate a .numa script file inside the Slasher workspace without executing GUI actions.",
     inputSchema: {
       type: "object",
       properties: {
         path: { type: "string" },
-        language: { type: "string", enum: ["slasher", "numadora", "numa"] }
+        language: { type: "string", enum: ["numadora", "numa"] }
       },
       required: ["path"],
       additionalProperties: false
@@ -710,13 +710,13 @@ const tools = [
   },
   {
     name: "slasher_run_script",
-    description: "Run a Slasher or Numadora script through the local server and return the structured run report, assertions, artifact paths, and screenshot evidence.",
+    description: "Run a Numadora script through the local server and return the structured run report, assertions, artifact paths, and screenshot evidence.",
     inputSchema: {
       type: "object",
       properties: {
         script: { type: "string" },
         stopOnError: { type: "boolean" },
-        language: { type: "string", enum: ["slasher", "numadora", "numa"] },
+        language: { type: "string", enum: ["numadora", "numa"] },
         purpose: { type: "string" },
         allowInteractiveInput: { type: "boolean" }
       },
@@ -726,13 +726,13 @@ const tools = [
   },
   {
     name: "slasher_run_script_file",
-    description: "Run a .slasher or .numa script file inside the Slasher workspace and return the structured run report and evidence.",
+    description: "Run a .numa script file inside the Slasher workspace and return the structured run report and evidence.",
     inputSchema: {
       type: "object",
       properties: {
         path: { type: "string" },
         stopOnError: { type: "boolean" },
-        language: { type: "string", enum: ["slasher", "numadora", "numa"] },
+        language: { type: "string", enum: ["numadora", "numa"] },
         purpose: { type: "string" },
         allowInteractiveInput: { type: "boolean" }
       },

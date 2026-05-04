@@ -112,15 +112,15 @@ In the web UI this approval is shown as the `Interactive` checkbox. Numadora
 dialog bindings such as `slasher_dialog.Message(...)` use the same explicit
 approval before displaying a local message box.
 
-This is intentionally different from the v1 `.slasher` command style:
+This is intentionally different from the removed v1 `.slasher` command style:
 
 ```text
 start notepad.exe
 text "hello"
 ```
 
-The v1 form is not a compatibility requirement and should not guide new
-Numadora API design.
+The v1 form is no longer accepted by Slasher script check/run APIs and should
+not guide new Numadora API design.
 
 ## Host Bindings
 
@@ -149,10 +149,10 @@ Slasher must preserve the existing automation evidence model:
 
 The language syntax can change, but the evidence loop should not regress.
 
-## Porting From v1
+## Historical Porting From v1
 
-Important v1 scenarios should be re-expressed in `.numa`; unimportant
-`.slasher` scripts may be deleted instead of migrated. Re-expression means
+Important historical v1 scenarios should be re-expressed in `.numa`;
+unimportant `.slasher` scripts should remain deleted. Re-expression means
 choosing the clearest Numadora API, not mechanically preserving old command
 names.
 

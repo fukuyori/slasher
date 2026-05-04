@@ -24,7 +24,7 @@ Slasher's Numadora-based script direction, and AI-facing automation contracts.
 - `slasher-script.md` - current Numadora script profile used by Slasher
 - `numadora-language-spec.md` - generic Numadora language specification
 - `slasher-numadora-integration.md` - Slasher bindings and Numadora integration model
-- `migration-from-slasher-v1.md` - migration from `.slasher` to `.numa`
+- `migration-from-slasher-v1.md` - historical notes for manually porting old `.slasher` files
 
 ## Active Planning
 

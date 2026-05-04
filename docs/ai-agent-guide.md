@@ -360,11 +360,12 @@ artifacts/runs/<run-id>/
   attachments/
 ```
 
-Current Phase A note: the artifact store, `POST /automation/runs`, and server-side `POST /scripts/run` endpoint exist. The initial server-side runner records one `AutomationEvent` per supported command and saves screenshot evidence for `capture` and command errors.
-Script files can be executed with `POST /scripts/run-file` or MCP `slasher_run_script_file`. Script paths must be inside the Slasher workspace.
-For file runs, `run.entryPoint` and each `events[].source.file` point to the `.slasher` file, and `events[].source.line` points to the original script line.
-Script files can be split with `include <path>` or `import <path>`. Included paths are relative to the current script file; inline scripts resolve includes from the workspace root. Included files must stay inside the workspace, and events from included files keep the included file path and original line number.
-When a script fails, inspect `error.source.file`, `error.source.line`, and `error.source.function`. `function` is currently the active `step` / `test step` name. For failures inside included files, `error.source.stack` lists the include/import call site chain.
+Current script execution is Numadora-only. `POST /scripts/run`,
+`POST /scripts/run-file`, and MCP `slasher_run_script*` calls accept `.numa`
+source; legacy `.slasher` paths are rejected with `slasher_language_removed`.
+Script paths must be inside the Slasher workspace. When a script fails,
+inspect `error.source.file`, `error.source.line`, and `error.source.function`
+when available.
 
 ## Error Handling Rules
 
@@ -385,38 +386,26 @@ On failure:
 4. Include the action that failed, source file, source line, source function, expected state, actual state, and screenshot path.
 5. Avoid continuing with destructive actions.
 
-## Useful Script Commands
+## Useful Numadora Script Shape
 
 Workspace script file example:
 
 ```text
-scripts/samples/ai-agent-smoke.slasher
+scripts/numadora-samples/notepad-check.numa
 ```
 
-Split script example:
+Numadora sample:
 
-```text
-scripts/samples/include-main.slasher
-```
+```numadora
+IMPORT slasher_app AS app
+IMPORT slasher_window AS win
+IMPORT slasher_input AS input
 
-Inside a script file:
-
-```text
-include lib/common.slasher
-```
-
-Window and app:
-
-```text
-start notepad.exe
-wait window Notepad 10000
-app select notepad
-foreground
-restore
-maximize
-minimize
-move 80 80 900 640
-close
+FUNC main()
+    LET handle := app.Start("notepad.exe")
+    win.Focus(handle)
+    input.Text("hello from Slasher")
+END
 ```
 
 Keyboard and text:
@@ -480,124 +469,24 @@ fail "explicit failure"
 
 Use `step "name"` or `test step "name"` before a meaningful test phase. Subsequent events keep that step name, which makes `summary.txt` and `events.jsonl` easier for agents and humans to scan.
 
-Use `agent note "message"` when a test discovers context that the next agent or a human should see without parsing screenshots. It is stored as a `note` log entry in the event and in `logs/script.log`.
-
-Use `test attach "path" as role` to copy expected output, debug logs, downloaded files, or other evidence into the run's `attachments` directory. The event receives an `attachment` evidence item with the chosen role, and `summary.txt` includes the attachment path.
-
 After a script run completes, inspect `report.html` for a quick human-readable timeline. It is stored beside `run.json`, `events.jsonl`, and `summary.txt`, and can also be fetched with `GET /automation/runs/{runId}/report`.
 HTML reports embed preview screenshots inline while preserving full-size screenshot artifacts as links.
 In the Web UI, the Run Report panel links directly to the HTML report, script log, text summary, event list, and run JSON after a script run completes. Use Recent Runs to load an earlier run back into the panel and reopen its artifacts.
 
-Use `wait screenStable [selected|full] [stableMs] [timeoutMs]` before reading the screen after a launch, resize, animation, or web navigation. It samples preview screenshots until the image stops changing, then records `wait.screenStable` in the run events.
-
 Use per-step capture only when debugging or producing a detailed audit trail. Set `capturePolicy.captureBeforeEachStep` and/or `capturePolicy.captureAfterEachStep` to true. The event evidence will include `before` / `after` screenshots using `capturePolicy.captureTarget`.
 
-`image match <template.bmp> [selected|full] [threshold n] [maxWidth n] [maxHeight n] [step n]` and `assert image match ...` currently support uncompressed BMP templates. Relative paths resolve from the current `.slasher` file, or from the workspace root for inline scripts.
+Use Numadora host modules such as `slasher_browser`, `slasher_screen`,
+`slasher_element`, `slasher_window`, and `slasher_input` for browser, screen,
+element, window, and input actions. Do not use legacy command-style script
+syntax.
 
-Selenium-style browser commands use WebDriver sessions: `browser webdriver`, `browser current`, `browser title`, `browser url`, `browser find`, `browser click`, `browser hover`, `browser double-click`, `browser right-click`, `browser type`, `browser press`, `browser upload`, `browser drag`, `browser select-option`, `browser selected-options`, `browser wait-download`, `browser logs`, `browser clear`, `browser submit`, `browser text`, `browser attr`, `browser wait`, `browser js`, `browser cookies`, `browser storage`, `browser screenshot`, `browser links`, `browser windows`, `browser new-webdriver-tab`, `browser switch`, `browser close-tab`, and `browser quit`. Use `downloadDir=<path>` on `browser webdriver` when the test needs deterministic download evidence, and use `browser logs` to inspect console messages after navigation or actions. The older `browser launch/open/select/go/back/forward/refresh/close/new-tab` commands still operate the browser as a normal Windows app with keyboard shortcuts.
 Slasher includes NuGet-provided ChromeDriver, GeckoDriver, and MSEdgeDriver binaries when available and falls back to Selenium Manager when a packaged driver is not present. Edge, Chrome, and Firefox still need to be installed on the machine.
-
-`assert screen contains <text> [selected|full]` is intentionally conservative until OCR is implemented. It fails with `screen_contains_unavailable`, records the expected text, and captures screenshots for agent review instead of pretending the text was verified.
 
 On failures, check `error.details.diagnostics` before guessing. Slasher adds warnings for common automation mistakes such as no selected target window, a selected/foreground mismatch, or a foreground window that looks like the Slasher control UI, Codex, or a browser. The Web UI Run Report shows these diagnostics inline below failed events.
 
-Server-side script variables:
-
-- Use `set name value` or `let name = value` for text variables.
-- Use `set global name value`, `set file name value`, or `set local name value` for explicit scope.
-- Use `command ... as name` to store command results.
-- Use `${name}` and `${object.property}` inside later commands.
-- `_` contains the last command result.
-- `selected` contains the current selected window when available.
-- Use `vars` to inspect variables in the run events.
-
-Variable scopes:
-
-- `global` is visible to the whole run and included files.
-- `file` is visible only to commands from the same `.slasher` file.
-- `local` is visible only inside the current logical function, currently the active `step` / `test step`.
-
-Unqualified writes keep existing behavior and write to the global run scope unless the variable already exists in `local` or `file`. Reads resolve `local`, then `file`, then `global`.
-
-Scope example:
-
-```text
-scripts/samples/scope-main.slasher
-```
-
-Server-side functions:
-
-```text
-function addItem name amount
-set local itemName "${name}"
-add global total "${amount}"
-return "${total}"
-endfunction
-
-call addItem alpha 2 as firstTotal
-```
-
-Function definitions are skipped during top-level execution and run only through `call`. Each call gets a fresh `local` scope; parameters become local variables. `return` exits the current function; `call ... as name` stores the returned value. Use functions to group reusable test setup, assertions, and cleanup helpers.
-
-Function example:
-
-```text
-scripts/samples/function-main.slasher
-```
-
-Server-side arrays:
-
-```text
-array items alpha beta
-push items gamma
-get items 1 as second
-length items as count
-join items "," as csv
-log "${second}/${count}/${csv}/${items.length}/${items.2}"
-pop items as last
-```
-
-Server-side control flow:
-
-```text
-if "${mode}" == "fast"
-log "fast path"
-else
-log "slow path"
-endif
-
-repeat 3
-log "repeat ${iteration}"
-endrepeat
-
-foreach item in items
-log "${index}: ${item}"
-endforeach
-
-set i 0
-while ${i} < 3
-log "while ${i}"
-add i 1
-endwhile
-```
-
-Server-side error handling:
-
-```text
-try
-fail "something went wrong"
-catch e
-log "caught ${e.code}: ${e.message}"
-finally
-log "cleanup"
-endtry
-```
-
-Use `catch` for errors that are expected and recoverable in the scenario. Use `finally` for cleanup such as closing test windows. Uncaught errors keep the run failed.
-
-Assertion failures return `assertion_failed`, include expected and actual values, and save error screenshots when capture-on-error is enabled.
-Malformed script blocks such as a missing `endif`, `endrepeat`, `endforeach`, or `endwhile` return structured script errors such as `block_not_closed` and save error screenshots.
-Error events include `source.file`, `source.line`, `source.function`, and, when relevant, `source.stack`. `summary.txt` includes the same source in compact `@file:line#function` form.
+Use Numadora variables, arrays, functions, and modules for script structure.
+Do not use legacy server-side `set`, `include`, `function`, or `call` command
+syntax in new scripts.
 
 ## Agent Prompt Template
 

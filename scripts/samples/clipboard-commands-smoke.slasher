@@ -1,8 +1,0 @@
-# Clipboard command smoke.
-clipboard clear
-clipboard assign "hello clipboard"
-clipboard get as clip
-assert value "${clip}" == "hello clipboard"
-clipboard clear
-clipboard get as cleared
-assert value "${cleared}" == ""

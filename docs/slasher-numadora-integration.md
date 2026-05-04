@@ -192,12 +192,12 @@ The detailed phase plan lives in `numadora-migration-plan.md`. At a high level:
 4. N3 runs a `.numa` script through Slasher and emits normal artifacts.
 5. N4 expands module coverage for real AI-driven tests.
 6. N5 adds ergonomic macro support only if Numadora supports it.
-7. N6 optionally provides porting assistance for important `.slasher` files.
-8. N7 removes or archives the v1 runner once `.numa` covers the core loop.
+7. N6 optionally provides historical porting assistance for old `.slasher` files.
+8. N7 keeps public script check/run Numadora-only.
 
 ## Open Questions
 
 - How should host bindings be represented in the current Numadora runtime?
 - Should Slasher run Numadora as an external process long term, or embed it?
 - What is the minimal source-location payload needed for useful run errors?
-- Which v1 samples are important enough to port before v1 removal?
+- Which historical v1 samples, if any, are important enough to port manually?

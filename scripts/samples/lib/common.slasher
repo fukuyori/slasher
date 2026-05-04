@@ -1,5 +1,0 @@
-# Shared helpers for include/import smoke tests.
-test step "included common setup"
-set helper_message "hello from included file"
-array helper_items one two
-push helper_items three

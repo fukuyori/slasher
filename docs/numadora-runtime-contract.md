@@ -168,7 +168,8 @@ Mapping rules:
 
 Current implementation status:
 
-- `.numa` run requests are routed away from the v1 `.slasher` parser.
+- Script run requests are Numadora-only. `.slasher` paths and
+  `language=slasher` are rejected with `slasher_language_removed`.
 - Slasher runs Numadora check as a preflight before run.
 - `.numa` run requests accept an optional `purpose`; missing purpose defaults
   to `local-test`
