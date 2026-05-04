@@ -8,7 +8,6 @@ public sealed partial class ScriptRunService
 {
     private const int PreviewMaxWidth = 1280;
     private const int PreviewMaxHeight = 720;
-    private const int MaxIncludeDepth = 16;
 
     private readonly WindowsAutomationService _automation;
     private readonly BrowserAutomationService _browser;
@@ -75,44 +74,25 @@ public sealed partial class ScriptRunService
             return await FailRemovedSlasherRunAsync(report, request.StopOnError, cancellationToken);
         }
 
-        if (IsNumadoraRun(request.Language, request.Path))
+        if (!IsNumadoraRun(request.Language, request.Path))
         {
-            return await RunNumadoraPreflightAsync(
-                new ScriptCheckRequest(Path: request.Path, Language: "numadora"),
+            var report = _artifacts.StartRun(
                 name,
+                AutomationRunMode.Script,
                 sourceFile,
-                request.StopOnError,
-                request.CapturePolicy,
-                request.Purpose,
-                request.AllowInteractiveInput,
-                cancellationToken);
+                request.CapturePolicy);
+            return await FailUnsupportedScriptLanguageRunAsync(report, request.Language, request.StopOnError, cancellationToken);
         }
 
-        var runReport = _artifacts.StartRun(
+        return await RunNumadoraPreflightAsync(
+            new ScriptCheckRequest(Path: request.Path, Language: "numadora"),
             name,
-            AutomationRunMode.Script,
             sourceFile,
-            request.CapturePolicy);
-
-        IReadOnlyList<ScriptLine> lines;
-        try
-        {
-            lines = await ParseScriptFileAsync(scriptPath, cancellationToken);
-        }
-        catch (ScriptCommandException ex)
-        {
-            var state = new ScriptExecutionState(runReport);
-            await RecordScriptErrorAsync(
-                new ScriptLine(1, 1, $"parse {sourceFile}", sourceFile, null, []),
-                state,
-                ex,
-                request.StopOnError,
-                cancellationToken);
-            state.Report = _artifacts.CompleteRun(state.Report, AutomationRunStatus.Failed, state.FinalError, null);
-            return new ScriptRunResponse(false, state.Report, state.Events, state.FinalError);
-        }
-
-        return await ExecuteRunAsync(lines, runReport, new ScriptRunRequest(string.Empty, name, request.StopOnError, request.CapturePolicy, Purpose: request.Purpose), cancellationToken);
+            request.StopOnError,
+            request.CapturePolicy,
+            request.Purpose,
+            request.AllowInteractiveInput,
+            cancellationToken);
     }
 
     public async Task<ScriptRunResponse> RunAsync(ScriptRunRequest request, CancellationToken cancellationToken)
@@ -127,51 +107,25 @@ public sealed partial class ScriptRunService
             return await FailRemovedSlasherRunAsync(removedReport, request.StopOnError, cancellationToken);
         }
 
-        if (IsNumadoraRun(request.Language, null))
+        if (!IsNumadoraRun(request.Language, null))
         {
-            return await RunNumadoraPreflightAsync(
-                new ScriptCheckRequest(Script: request.Script, Language: "numadora"),
-                string.IsNullOrWhiteSpace(request.Name) ? "numadora-script-run" : request.Name,
+            var report = _artifacts.StartRun(
+                string.IsNullOrWhiteSpace(request.Name) ? "script-run" : request.Name,
+                AutomationRunMode.Script,
                 "POST /scripts/run",
-                request.StopOnError,
-                request.CapturePolicy,
-                request.Purpose,
-                request.AllowInteractiveInput,
-                cancellationToken);
+                request.CapturePolicy);
+            return await FailUnsupportedScriptLanguageRunAsync(report, request.Language, request.StopOnError, cancellationToken);
         }
 
-        var report = _artifacts.StartRun(
-            string.IsNullOrWhiteSpace(request.Name) ? "script-run" : request.Name,
-            AutomationRunMode.Script,
+        return await RunNumadoraPreflightAsync(
+            new ScriptCheckRequest(Script: request.Script, Language: "numadora"),
+            string.IsNullOrWhiteSpace(request.Name) ? "numadora-script-run" : request.Name,
             "POST /scripts/run",
-            request.CapturePolicy);
-
-        IReadOnlyList<ScriptLine> lines;
-        try
-        {
-            lines = ParseScript(
-                request.Script,
-                "inline-script",
-                _workspaceRoot,
-                new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-                [],
-                inheritedFunction: null,
-                depth: 0);
-        }
-        catch (ScriptCommandException ex)
-        {
-            var state = new ScriptExecutionState(report);
-            await RecordScriptErrorAsync(
-                new ScriptLine(1, 1, "parse inline script", "inline-script", null, []),
-                state,
-                ex,
-                request.StopOnError,
-                cancellationToken);
-            state.Report = _artifacts.CompleteRun(state.Report, AutomationRunStatus.Failed, state.FinalError, null);
-            return new ScriptRunResponse(false, state.Report, state.Events, state.FinalError);
-        }
-
-        return await ExecuteRunAsync(lines, report, request, cancellationToken);
+            request.StopOnError,
+            request.CapturePolicy,
+            request.Purpose,
+            request.AllowInteractiveInput,
+            cancellationToken);
     }
 
     private static bool IsNumadoraRun(string? language, string? path)
@@ -217,6 +171,26 @@ public sealed partial class ScriptRunService
             new ScriptCommandException(
                 "slasher_language_removed",
                 "The legacy Slasher script language has been removed. Use Numadora (.numa) scripts.",
+                Recoverable: false),
+            stopOnError,
+            cancellationToken);
+        state.Report = _artifacts.CompleteRun(state.Report, AutomationRunStatus.Failed, state.FinalError, null);
+        return new ScriptRunResponse(false, state.Report, state.Events, state.FinalError);
+    }
+
+    private async Task<ScriptRunResponse> FailUnsupportedScriptLanguageRunAsync(
+        AutomationRunReport report,
+        string? language,
+        bool stopOnError,
+        CancellationToken cancellationToken)
+    {
+        var state = new ScriptExecutionState(report);
+        await RecordScriptErrorAsync(
+            new ScriptLine(1, 1, "unsupported script language", report.EntryPoint ?? "script", null, []),
+            state,
+            new ScriptCommandException(
+                "unsupported_script_language",
+                $"Unsupported script language '{language ?? "(default)"}'. Use Numadora.",
                 Recoverable: false),
             stopOnError,
             cancellationToken);

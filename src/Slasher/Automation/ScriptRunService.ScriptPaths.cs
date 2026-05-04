@@ -5,31 +5,6 @@ namespace Slasher.Automation;
 
 public sealed partial class ScriptRunService
 {
-    private string ResolveIncludePath(string path, string baseDirectory)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            throw new ScriptCommandException("invalid_include_path", "Include path is required.");
-        }
-
-        var fullPath = Path.IsPathRooted(path)
-            ? Path.GetFullPath(path)
-            : Path.GetFullPath(Path.Combine(baseDirectory, path));
-        var root = Path.GetFullPath(_workspaceRoot);
-        if (!fullPath.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ScriptCommandException("include_path_outside_workspace", "Included script files must be inside the Slasher workspace.");
-        }
-
-        if (!File.Exists(fullPath))
-        {
-            throw new ScriptCommandException("include_file_not_found", $"Included script file '{path}' was not found.");
-        }
-
-        return fullPath;
-    }
-
     private string ResolveScriptPath(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
