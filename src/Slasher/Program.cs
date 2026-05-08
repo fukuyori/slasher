@@ -1,6 +1,8 @@
 using Slasher.Api;
 using Slasher.Automation;
+using Slasher.Data;
 using Slasher.Files;
+using Slasher.Peers;
 using Slasher.Windows;
 
 var workspaceRoot = ResolveWorkspaceRoot();
@@ -26,12 +28,18 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
 });
 
+builder.Services.Configure<PeerOptions>(builder.Configuration.GetSection("PeerMode"));
 builder.Services.AddSingleton<WindowsAutomationService>();
 builder.Services.AddSingleton<BrowserAutomationService>();
 builder.Services.AddSingleton<FileSystemAutomationService>();
 builder.Services.AddSingleton<ClipboardService>();
+builder.Services.AddSingleton<CsvAutomationService>();
+builder.Services.AddSingleton<JsonAutomationService>();
 builder.Services.AddSingleton<AutomationRunArtifactStore>();
 builder.Services.AddSingleton<ScriptRunService>();
+builder.Services.AddSingleton<PeerIdentityStore>();
+builder.Services.AddSingleton<PeerRegistry>();
+builder.Services.AddSingleton<PeerEndpointService>();
 
 var app = builder.Build();
 

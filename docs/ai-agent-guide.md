@@ -10,6 +10,10 @@ Slasher is not only an input driver. Treat it as an observation-and-evidence sys
 4. Capture or inspect the result.
 5. Record enough evidence for a human or another agent to understand the run.
 
+The current agent workflow is local-first. Future Slasher-to-Slasher work should
+preserve the same loop across peers: the agent should see which peer owns the
+resource, which peer executed the action, and which artifacts prove the result.
+
 ## Primary Goal
 
 Slasher exists first to let agents such as Codex automate Windows app development and testing.
@@ -39,8 +43,15 @@ Agents can now rely on:
 - browser screenshots, downloads, selected options, tabs/windows, and console logs
 
 The next work is Phase 12 RPA expansion. Start with `docs/phase-12-rpa-expansion-plan.md`, and keep new data/RPA packages aligned across HTTP, script, MCP, and documentation.
+The peer namespace and portable-core direction is tracked separately in
+`docs/peer-network-model.md`; it is design-stage unless peer endpoints are
+implemented in the current checkout.
 
 ## Current Connection Modes
+
+These modes are local by default. Keep the server bound to `127.0.0.1` unless
+peer mode, authentication, registry, and network policy have been deliberately
+configured.
 
 ### HTTP
 
@@ -75,6 +86,13 @@ The MCP bridge uses:
 ```text
 SLASHER_URL=http://127.0.0.1:5055
 ```
+
+### Peer Namespace
+
+Peer namespace endpoints are part of the design direction, not the current
+agent baseline. When they land, agents should treat peer resources as typed
+Slasher resources with policy and evidence, not as raw remote desktop or raw
+file-system access.
 
 Important MCP tools:
 

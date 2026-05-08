@@ -2,11 +2,15 @@
 
 This directory is organized around the current Slasher implementation state,
 Slasher's Numadora-based script direction, and AI-facing automation contracts.
+Slasher is local-first today. Longer-term distributed work should preserve the
+same evidence and policy contracts while moving toward a portable Slasher core
+and a peer resource namespace.
 
 ## Start Here
 
 - `ai-agent-guide.md` - practical guide for AI agents using Slasher
 - `implementation-roadmap.md` - current status, completed tracks, and next work
+- `development-schedule.md` - whole-project development order across RPA and peer work
 - `language-system.md` - entry point for Slasher's Numadora-based script direction
 
 ## Architecture And Contracts
@@ -15,6 +19,8 @@ Slasher's Numadora-based script direction, and AI-facing automation contracts.
 - `ai-automation-contract.md` - action/result/report schema
 - `ai-test-observability.md` - evidence, screenshots, logs, and failure reporting
 - `security-policy.md` - security rules for powerful local PC automation
+- `peer-network-model.md` - Plan 9/HarmonyOS-inspired peer namespace and portable-core model
+- `peer-implementation-plan.md` - implementation phases for peer namespace and portable core
 - `numadora-lineage-policy-plan.md` - lineage-aware policy plan for Numadora host calls
 
 ## Language
@@ -28,7 +34,9 @@ Slasher's Numadora-based script direction, and AI-facing automation contracts.
 
 ## Active Planning
 
+- `development-schedule.md` - whole-project development schedule
 - `phase-12-rpa-expansion-plan.md` - next RPA package expansion plan
+- `peer-implementation-plan.md` - peer namespace implementation plan
 
 ## Removed From Active Docs
 

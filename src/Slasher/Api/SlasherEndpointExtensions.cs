@@ -1,5 +1,7 @@
 using Slasher.Automation;
+using Slasher.Data;
 using Slasher.Files;
+using Slasher.Peers;
 using Slasher.Windows;
 
 namespace Slasher.Api;
@@ -80,6 +82,13 @@ public static partial class SlasherEndpointExtensions
                 "GET /automation/runs/{runId}/report",
                 "GET /automation/runs/{runId}/artifacts/raw",
                 "GET /automation/runs/{runId}/artifacts/content",
+                "POST /data/csv/read",
+                "POST /data/csv/to-json",
+                "POST /data/json/read",
+                "POST /data/json/query",
+                "POST /data/json/write",
+                "GET /peer/hello",
+                "GET /peer/capabilities",
                 "POST /scripts/check",
                 "POST /scripts/run",
                 "POST /scripts/run-file"
@@ -98,6 +107,8 @@ public static partial class SlasherEndpointExtensions
         MapFileSystemEndpoints(app);
         MapScreenshotEndpoints(app);
         MapAutomationEndpoints(app);
+        MapDataEndpoints(app);
+        MapPeerEndpoints(app);
         MapScriptEndpoints(app);
 
         return app;

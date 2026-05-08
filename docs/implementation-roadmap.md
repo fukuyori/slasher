@@ -2,12 +2,16 @@
 
 Slasher's primary goal is to let AI agents such as Codex operate, test, and
 debug real Windows applications. Its secondary goal is RPA-style local
-automation.
+automation. Its longer-term architecture should keep the automation core
+portable and allow trusted Slasher peers to expose typed resources through a
+policy-gated namespace.
 
 This roadmap is intentionally short. Detailed contracts live in their own
 documents, and the language direction is tracked under `language-system.md`.
 Security rules for the PC-control surface are tracked in
-`security-policy.md`.
+`security-policy.md`. Peer namespace and portable-core direction is tracked in
+`peer-network-model.md`. The cross-track implementation order is tracked in
+`development-schedule.md`.
 
 ## Current Status
 
@@ -23,7 +27,8 @@ The implementation now includes:
 - browser DOM actions, screenshots, tabs/windows, downloads, selected options, and console log readback
 
 The next implementation focus is Phase 12: practical RPA package expansion on
-top of the completed evidence model.
+top of the completed evidence model. Peer namespace work is a separate
+architecture track and should not weaken the local-first security defaults.
 
 ## Guiding Principles
 
@@ -47,6 +52,11 @@ top of the completed evidence model.
 5. Security policy moves with capability expansion.
    New PC-control powers should declare their capability class, audit fields,
    and redaction behavior before they become broadly available.
+
+6. Peer namespace work preserves local semantics.
+   A peer-executed action should produce the same conceptual run, event,
+   evidence, policy, and error shapes as a local action, with additional
+   coordinator/executor peer metadata.
 
 ## Completed Tracks
 
@@ -118,6 +128,28 @@ Priority order:
 Phase 12 packages should reuse the existing event/report/artifact model. They
 should not introduce separate reporting formats.
 
+## Architecture Track: Portable Core And Peer Namespace
+
+Key document: `peer-network-model.md`.
+Implementation plan: `peer-implementation-plan.md`.
+Security gate: `security-policy.md`.
+
+This track captures the Plan 9/HarmonyOS-inspired direction:
+
+- Plan 9-like resource namespace for Slasher resources
+- HarmonyOS-like coordination across trusted devices
+- portable core models for runs, resources, capabilities, policy, and evidence
+- platform adapters for Windows and future non-Windows or headless peers
+- peer protocol starting with authenticated, read-only namespace inspection
+
+Implementation should follow the `Peer P0` through `Peer P9` phases in
+`peer-implementation-plan.md`, starting with contracts, identity, and read-only
+namespace inspection before delegated runs or interactive operations.
+
+This is not a replacement for Phase 12. It is the architectural path that
+prevents future Slasher-to-Slasher communication from becoming unsafe ad hoc
+remote control.
+
 ## Language Track
 
 Key entry point: `language-system.md`.
@@ -166,6 +198,11 @@ stable.
 - [x] Phase 10 observability hardening
 - [x] Phase 11 UI/image/browser test automation
 - [ ] Phase 12 RPA expansion
+- [x] Peer namespace core contracts
+- [x] Peer identity and metadata endpoints
+- [ ] Read-only peer namespace inspection
+- [ ] Observe-only delegated peer run
+- [ ] Portable core extraction
 - [x] Language direction docs
 - [ ] Implementation-ready `.numa` examples
 - [ ] Numadora runtime integration plan

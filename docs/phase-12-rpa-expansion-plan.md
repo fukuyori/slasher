@@ -3,6 +3,9 @@
 Phase 12 starts after Phase 11 commit `7caa579` (`Complete Slasher phase 11`).
 
 The goal is to add practical RPA packages while preserving Slasher's primary purpose: AI-driven Windows app development and testing with strong evidence, logs, screenshots, and structured errors.
+Distributed peer namespace work is tracked separately in
+`peer-network-model.md`. Phase 12 packages should still be designed so their
+data models can later move behind portable Slasher resources.
 
 ## Current Baseline
 
@@ -19,6 +22,8 @@ Do not duplicate these mechanisms in Phase 12. New packages should call into the
 Security policy for destructive actions, credentials, remote access, and
 redaction is tracked in `security-policy.md` and should be treated as a gate
 for the relevant slices.
+Peer export of any Phase 12 resource must wait until the peer namespace policy
+rules are implemented.
 
 ## Phase 12 Priority Order
 
@@ -40,6 +45,8 @@ Browser DevTools/network capture is useful, but it is a separate browser-testing
   current Numadora modules such as `slasher_csv`, `slasher_json`, and
   `slasher_excel`.
 - Keep HTTP API, script, MCP, and docs aligned in the same change.
+- Keep package result shapes portable enough to be exposed as future namespace
+  resources.
 - Return structured objects that work with existing variables, arrays, assertions, and logs.
 - Every command must produce an execution event when run through scripts.
 - Destructive operations must expose enough parameters to be auditable.

@@ -6,10 +6,10 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
-    <Version>0.2.3</Version>
-    <AssemblyVersion>0.2.3.0</AssemblyVersion>
-    <FileVersion>0.2.3.0</FileVersion>
-    <InformationalVersion>0.2.3</InformationalVersion>
+    <Version>0.2.4</Version>
+    <AssemblyVersion>0.2.4.0</AssemblyVersion>
+    <FileVersion>0.2.4.0</FileVersion>
+    <InformationalVersion>0.2.4</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

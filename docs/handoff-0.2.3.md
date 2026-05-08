@@ -1,5 +1,9 @@
 # Slasher 0.2.3 Handoff
 
+This is a historical handoff snapshot. For current direction, use
+`implementation-roadmap.md`, `language-system.md`, `security-policy.md`, and
+`peer-network-model.md`.
+
 Last confirmed commit:
 
 ```text

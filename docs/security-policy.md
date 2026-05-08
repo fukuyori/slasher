@@ -87,6 +87,7 @@ Slasher should classify actions before adding more power.
 | Clipboard | get, assign, paste | redact or mark sensitive values |
 | Process/app | start, close, kill, select | log executable/process/window metadata |
 | Network/remote | non-local bind, remote clients, HTTP calls | opt-in with authentication |
+| Peer delegation | Slasher-to-Slasher delegated runs | registered peer, trust profile, and capability policy |
 | Scheduling | unattended recurring runs | opt-in with stored policy |
 | Secrets | credentials, tokens, secure variables | never log raw values by default |
 
@@ -179,6 +180,36 @@ Examples:
 - CORS should remain closed unless a specific trusted origin is configured.
 - MCP should inherit the same server-side policy as HTTP.
 
+## Peer Delegation Rules
+
+Slasher-to-Slasher communication should be treated as delegated execution, not
+as direct remote control. A peer may request a run, but the executor peer must
+apply its own local policy before touching local windows, input, files,
+clipboard, browser state, or other machine resources.
+
+Initial peer rules:
+
+- peer mode is disabled unless explicitly configured
+- unknown peers can use neither delegated runs nor artifact readback
+- peer namespace export is a Slasher resource view, not a raw OS file system or
+  desktop mount
+- namespace `list`, resource `read`, and resource `invoke` all require policy
+  evaluation
+- registered peers receive a trust profile such as `known`, `observed`, or
+  `interactive`
+- `observed` peers may request observe-only runs but not input, file-write,
+  clipboard, browser-data, destructive, secret, or unattended actions
+- relay is denied by default
+- the executor peer records requester identity, coordinator peer, executor peer,
+  trust profile, requested capabilities, granted capabilities, and refusal
+  reasons in run artifacts
+- capability negotiation is advisory; every concrete host call is still checked
+  at run time
+- remote artifact access must be authorized and redacted with at least the same
+  strictness as MCP responses
+
+See `peer-network-model.md` for the protocol and portable-core design.
+
 ## Development Gates
 
 Before N1/N2 host bindings:
@@ -208,6 +239,17 @@ Before remote access:
 - document bind address and firewall expectations
 - add audit events for remote caller metadata
 
+Before peer delegation:
+
+- define peer identity and registry storage
+- add peer capability names and trust profiles
+- define portable namespace paths and resource kinds
+- expose `GET /peer/hello` and `GET /peer/capabilities`
+- expose read-only namespace inspection before any remote mutation
+- keep `POST /peer/runs` observe-only until audit fields and artifact readback
+  are proven
+- add tests that unknown or under-trusted peers fail closed
+
 ## Open Questions
 
 - Should Slasher have a policy file, environment variables, Web UI settings, or
@@ -217,3 +259,6 @@ Before remote access:
 - Should AI-agent MCP calls default to stricter policy than Web UI commands?
 - How should interactive approval work when the run is started by MCP?
 - Which actions need Windows elevation detection and refusal messages?
+- Should peer mode share the local Web UI port or use a separate listener?
+- Should peer authentication start with per-peer bearer tokens, signed requests,
+  or both?

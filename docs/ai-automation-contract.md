@@ -20,8 +20,11 @@ This contract applies to:
 - CLI runs
 - MCP tool calls
 - compiled script executables
+- future peer namespace reads and delegated peer runs
 
-The same action should produce the same conceptual result shape regardless of entry point.
+The same action should produce the same conceptual result shape regardless of
+entry point. Peer-executed actions add coordinator/executor metadata, but they
+must not use a separate reporting model.
 
 ## Core Concepts
 
@@ -38,6 +41,7 @@ Every run has:
 - event list
 - final selected target, if any
 - final error, if any
+- execution scope, when a run is executed by a remote Slasher peer
 
 ### Event
 
@@ -60,6 +64,9 @@ Initial target kinds:
 - `clipboard`
 - `browser`
 - `element` future
+
+Future peer namespace targets should reuse these target kinds where possible
+and add peer identity metadata instead of inventing parallel target shapes.
 
 ### Evidence
 
@@ -138,6 +145,9 @@ Rules:
   "artifactRoot": "artifacts/runs/20260428-101530-notepad-a1b2",
   "eventCount": 5,
   "failedEventSequence": null,
+  "executionScope": "local",
+  "coordinatorPeer": null,
+  "executorPeer": null,
   "selectedTarget": {
     "kind": "window",
     "handle": "0x123456",
@@ -171,6 +181,15 @@ Run mode values:
 - `cli`
 - `script`
 - `compiled`
+
+Execution scope values:
+
+- `local`
+- `peer`
+
+For `peer` runs, `coordinatorPeer` and `executorPeer` should identify the
+Slasher peer that coordinated the run and the peer that controlled the machine
+resource. Local runs may omit these fields or set them to `null`.
 
 ## Event Schema
 

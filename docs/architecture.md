@@ -1,11 +1,18 @@
 # Slasher Architecture
 
-This note records the source layout Slasher should grow toward. The first product goal is to let AI agents such as Codex operate and test real Windows applications. The second goal is RPA-style local automation. The source layout should keep AI observations, RPA actions, script language changes, and API surfaces independently editable.
+This note records the source layout Slasher should grow toward. The first
+product goal is to let AI agents such as Codex operate and test real Windows
+applications. The second goal is RPA-style local automation. A longer-term
+distributed goal is to let multiple Slasher instances expose typed resources
+through a portable, policy-gated peer namespace. The source layout should keep
+AI observations, RPA actions, script language changes, API surfaces, peer
+transport, and platform adapters independently editable.
 
 ## Product Priority
 
 1. AI-driven Windows app development and testing.
 2. RPA-style local automation.
+3. Portable core and Slasher-to-Slasher peer namespaces.
 
 This means the architecture should prioritize:
 
@@ -18,8 +25,12 @@ This means the architecture should prioritize:
 - assertions and test steps
 - MCP-friendly APIs
 - recovery information after failures
+- portable contracts that do not depend on Windows APIs
+- explicit resource identity for local and peer-executed actions
 
 Broad RPA package coverage is important, but it should build on that action/observation foundation.
+Peer networking should also build on that foundation: a remote peer is an
+executor with its own policy, not a raw remote-control target.
 
 ## Current Backend Layout
 
@@ -44,6 +55,34 @@ Broad RPA package coverage is important, but it should build on that action/obse
   - low-level P/Invoke declarations only
 - `Files/FileSystemAutomationService.cs`
   - file/folder/package actions
+
+## Portable Core Direction
+
+The current implementation is still a single ASP.NET Core application with
+Windows-specific services in the main project. Future peer work should avoid
+deepening that coupling.
+
+The portable core should own:
+
+- run, event, target, evidence, and error models
+- capability names and classification
+- policy input and policy decision shapes
+- redaction rules
+- resource namespace paths and resource kinds
+- peer identity, registry, and protocol DTOs
+
+Platform adapters should own:
+
+- Windows window/input/screen/clipboard/process behavior
+- browser-driver implementation details
+- file-system behavior that depends on the host OS
+- future Linux, macOS, or headless resource implementations
+
+Peer transport should call the portable core and an executor interface. It
+should not call `WindowsAutomationService` or `FileSystemAutomationService`
+directly.
+
+See `peer-network-model.md` for the Plan 9/HarmonyOS-inspired namespace model.
 
 ## Script Runtime Direction
 
@@ -180,3 +219,11 @@ When adding a new feature, prefer this order:
 4. Add MCP tool support if AI agents need direct access.
 5. Add README and script examples.
 6. Add a smoke test or sample script.
+
+For peer or portable-core work, prefer this order:
+
+1. Define the portable model or namespace resource shape.
+2. Add policy and capability metadata.
+3. Add the platform adapter implementation.
+4. Add HTTP/MCP/script exposure only after the adapter reports normal events.
+5. Add peer protocol exposure only after local behavior is auditable.
