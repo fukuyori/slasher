@@ -42,6 +42,34 @@ public sealed partial class FileSystemAutomationService
         return [path];
     }
 
+    private static void RequireDestructiveApproval(FileOperationRequest request, string operation)
+    {
+        if (request.DryRun || request.AllowDestructive)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"Operation '{operation}' is destructive and requires allowDestructive=true or dryRun=true.");
+    }
+
+    private static FileOperationPlan CreatePlan(
+        string operation,
+        FileOperationRequest request,
+        IReadOnlyList<string> targets,
+        bool destructive,
+        string? destination = null)
+    {
+        return new FileOperationPlan(
+            operation,
+            request.DryRun,
+            destructive,
+            !destructive || request.AllowDestructive || request.DryRun,
+            targets.Select(Path.GetFullPath).ToArray(),
+            string.IsNullOrWhiteSpace(destination) ? null : Path.GetFullPath(destination),
+            request.Recursive,
+            request.Overwrite);
+    }
+
     private static void CopyDirectory(string source, string destination, bool overwrite)
     {
         Directory.CreateDirectory(destination);

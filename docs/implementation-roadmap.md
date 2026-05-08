@@ -198,9 +198,12 @@ stable.
 - [x] Phase 10 observability hardening
 - [x] Phase 11 UI/image/browser test automation
 - [ ] Phase 12 RPA expansion
+- [x] Phase 12 local foundation: CSV/JSON/Excel data API slice
+- [x] Phase 12 local foundation: destructive file/folder approval and dry-run slice
+- [x] Phase 12 local foundation: file/folder watcher API slice
 - [x] Peer namespace core contracts
 - [x] Peer identity and metadata endpoints
-- [ ] Read-only peer namespace inspection
+- [x] Read-only peer namespace inspection
 - [ ] Observe-only delegated peer run
 - [ ] Portable core extraction
 - [x] Language direction docs

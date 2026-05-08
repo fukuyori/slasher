@@ -262,13 +262,13 @@ Exit criteria:
 
 | Item | Status |
 |---|---|
-| Phase 12 data packages | in progress: CSV/JSON HTTP APIs added; Excel pending |
-| Phase 12 safety packages | planned |
+| Phase 12 data packages | local foundation complete: CSV/JSON/Excel HTTP APIs added |
+| Phase 12 safety packages | local foundation complete: destructive file/folder approval, dry-run, and file watcher slices added |
 | Peer P0 contracts | in progress: peer DTOs, capabilities, resource address models added |
 | Peer P1 identity and registry | in progress: local identity store and manual registry loader added |
 | Peer P2 metadata endpoints | in progress: `/peer/hello` and `/peer/capabilities` added |
-| Peer P3 read-only namespace | planned |
-| Peer P4 read-only resources | planned |
+| Peer P3 read-only namespace | in progress: root namespace listing added |
+| Peer P4 read-only resources | in progress: identity, capabilities, windows, screen metadata, runs, and artifact reads added |
 | Peer P5 observe-only invoke | planned |
 | Peer P6 delegated observe runs | planned |
 | Peer P7 portable core extraction | planned |

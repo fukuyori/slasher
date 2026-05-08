@@ -82,13 +82,21 @@ public static partial class SlasherEndpointExtensions
                 "GET /automation/runs/{runId}/report",
                 "GET /automation/runs/{runId}/artifacts/raw",
                 "GET /automation/runs/{runId}/artifacts/content",
+                "POST /watchers/files",
+                "GET /watchers/files",
+                "GET /watchers/files/{watcherId}/events",
+                "POST /watchers/files/{watcherId}/stop",
                 "POST /data/csv/read",
                 "POST /data/csv/to-json",
                 "POST /data/json/read",
                 "POST /data/json/query",
                 "POST /data/json/write",
+                "POST /data/excel/workbook",
+                "POST /data/excel/read",
                 "GET /peer/hello",
                 "GET /peer/capabilities",
+                "GET /peer/ns",
+                "GET /peer/resource",
                 "POST /scripts/check",
                 "POST /scripts/run",
                 "POST /scripts/run-file"
@@ -107,6 +115,7 @@ public static partial class SlasherEndpointExtensions
         MapFileSystemEndpoints(app);
         MapScreenshotEndpoints(app);
         MapAutomationEndpoints(app);
+        MapWatcherEndpoints(app);
         MapDataEndpoints(app);
         MapPeerEndpoints(app);
         MapScriptEndpoints(app);

@@ -25,6 +25,29 @@ for the relevant slices.
 Peer export of any Phase 12 resource must wait until the peer namespace policy
 rules are implemented.
 
+## 0.2.5 Local Foundation Slice
+
+The local Phase 12 foundation slice is implemented:
+
+- `POST /data/csv/read`
+- `POST /data/csv/to-json`
+- `POST /data/json/read`
+- `POST /data/json/query`
+- `POST /data/json/write`
+- `POST /data/excel/workbook`
+- `POST /data/excel/read`
+- destructive file/folder operations require `allowDestructive=true` unless
+  `dryRun=true`
+- destructive file/folder operations return a `FileOperationPlan` for dry-runs
+- `POST /watchers/files`
+- `GET /watchers/files`
+- `GET /watchers/files/{watcherId}/events`
+- `POST /watchers/files/{watcherId}/stop`
+
+This slice deliberately stays local and HTTP-oriented. Script bindings, MCP
+tools, scheduling, credentials/secrets, report export, and peer export remain
+future Phase 12 work.
+
 ## Phase 12 Priority Order
 
 1. CSV package
@@ -54,7 +77,8 @@ Browser DevTools/network capture is useful, but it is a separate browser-testing
 
 ## CSV Package
 
-Recommended first slice.
+Initial HTTP slice implemented. Script and write/append support remain future
+work.
 
 Script commands:
 
@@ -66,9 +90,10 @@ csv append "artifacts/output.csv" row
 
 API candidates:
 
-- `POST /data/csv/read`
-- `POST /data/csv/write`
-- `POST /data/csv/append`
+- `POST /data/csv/read` implemented
+- `POST /data/csv/to-json` implemented
+- `POST /data/csv/write` future
+- `POST /data/csv/append` future
 
 Result shape:
 
@@ -103,9 +128,9 @@ json get config "browser.name" as browserName
 
 API candidates:
 
-- `POST /data/json/read`
-- `POST /data/json/write`
-- `POST /data/json/query`
+- `POST /data/json/read` implemented
+- `POST /data/json/write` implemented
+- `POST /data/json/query` implemented
 
 Acceptance checks:
 
@@ -116,7 +141,7 @@ Acceptance checks:
 
 ## Excel Package
 
-Implement after CSV/JSON command shapes settle.
+Initial read-only HTTP slice implemented.
 
 Script commands:
 
@@ -132,10 +157,10 @@ Implementation note:
 
 Acceptance checks:
 
-- reads `.xlsx`
-- selects sheet by name
-- maps first row to headers
-- writes simple rows to a new workbook
+- reads `.xlsx` implemented
+- selects sheet by name implemented
+- maps first row to headers implemented
+- writes simple rows to a new workbook future
 - returns row count, columns, and sheet name
 
 ## Safer Destructive Action Policy
@@ -153,14 +178,14 @@ Policy requirements:
 
 Initial targets:
 
-- file delete
-- folder delete
-- folder copy overwrite
+- file delete implemented
+- folder delete implemented
+- folder copy overwrite implemented
 - close all windows
 
 ## File/Folder Watchers
 
-Add after data commands.
+Initial HTTP slice implemented.
 
 Script idea:
 
@@ -171,9 +196,9 @@ watch folder "inbox" created "*.xlsx" timeout 60000 as workbook
 
 Acceptance checks:
 
-- supports timeout
+- supports persistent watcher start/list/events/stop
 - returns path, event type, timestamps
-- can be used in scripts without blocking forever
+- script timeout-oriented commands remain future work
 
 ## Verification For Each Slice
 

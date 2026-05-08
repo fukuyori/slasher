@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Slasher.Automation;
 using Slasher.Peers;
+using Slasher.Windows;
 using Xunit;
 
 namespace Slasher.Tests;
@@ -82,6 +84,40 @@ public sealed class PeerModelTests : IDisposable
             && capability.Status == "denied");
     }
 
+    [Fact]
+    public void NamespaceService_FiltersRootEntriesByTrustProfile()
+    {
+        var service = new NamespaceService(CreateRegistry());
+
+        var known = service.List("/", requestingPeerId: null);
+        var observed = service.List("/", "peer_known");
+
+        Assert.DoesNotContain(known.Entries, entry => entry.Name == "windows");
+        Assert.Contains(observed.Entries, entry => entry.Name == "windows");
+        Assert.Contains(observed.Entries, entry => entry.Name == "runs");
+    }
+
+    [Fact]
+    public void ResourceReadService_AllowsIdentityForKnownProfile()
+    {
+        var service = CreateResourceReadService();
+
+        var response = service.Read("/identity", requestingPeerId: null);
+
+        Assert.Equal("peer.identity", response.Kind);
+        Assert.Contains(PeerCapabilities.Hello, response.CapabilitiesUsed);
+    }
+
+    [Fact]
+    public void ResourceReadService_DeniesWindowsForKnownProfile()
+    {
+        var service = CreateResourceReadService();
+
+        var ex = Assert.Throws<ResourceReadException>(() => service.Read("/windows", requestingPeerId: null));
+
+        Assert.Equal("peer_capability_denied", ex.Code);
+    }
+
     private PeerEndpointService CreateService(string? registryPath = null)
     {
         var environment = new TestEnvironment(_root);
@@ -94,6 +130,48 @@ public sealed class PeerModelTests : IDisposable
         var identity = new PeerIdentityStore(environment, options);
         var registry = new PeerRegistry(environment, options);
         return new PeerEndpointService(identity, registry, options);
+    }
+
+    private PeerRegistry CreateRegistry()
+    {
+        var registryPath = Path.Combine(_root, "peers.json");
+        File.WriteAllText(registryPath,
+            """
+            {
+              "schemaVersion": 1,
+              "peers": [
+                {
+                  "peerId": "peer_known",
+                  "displayName": "known",
+                  "trustProfile": "observed",
+                  "enabled": true
+                }
+              ]
+            }
+            """);
+        var environment = new TestEnvironment(_root);
+        var options = Options.Create(new PeerOptions
+        {
+            DisplayName = "test-peer",
+            IdentityPath = Path.Combine(_root, "identity.json"),
+            RegistryPath = registryPath
+        });
+        return new PeerRegistry(environment, options);
+    }
+
+    private ResourceReadService CreateResourceReadService()
+    {
+        var environment = new TestEnvironment(_root);
+        var options = Options.Create(new PeerOptions
+        {
+            DisplayName = "test-peer",
+            IdentityPath = Path.Combine(_root, "identity.json")
+        });
+        var identity = new PeerIdentityStore(environment, options);
+        var registry = new PeerRegistry(environment, options);
+        var endpoint = new PeerEndpointService(identity, registry, options);
+        var artifactStore = new AutomationRunArtifactStore(environment);
+        return new ResourceReadService(endpoint, identity, registry, new WindowsAutomationService(), artifactStore);
     }
 
     public void Dispose()

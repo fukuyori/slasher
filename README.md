@@ -1,6 +1,6 @@
 # Slasher
 
-Current version: 0.2.4.
+Current version: 0.2.5.
 
 Slasher is a small Windows automation server written in C#. It exposes HTTP APIs for starting applications, enumerating and manipulating windows, sending keyboard and mouse input, and taking screenshots.
 
@@ -226,10 +226,13 @@ Current implemented automation areas:
 - Selenium WebDriver browser automation for Edge, Chrome, and Firefox
 - server-side Numadora check/run preflight and structured run artifacts
 - policy-gated Numadora observe and selected interactive host calls
+- Phase 12 local data APIs for CSV, JSON, and basic `.xlsx` reading
+- safer file/folder destructive operations with `dryRun` and `allowDestructive`
+- file/folder watcher APIs
 
 Planned or design-stage areas:
 
-- Phase 12 CSV/JSON/Excel and safer destructive RPA packages
+- Phase 12 scheduling, credentials/secrets, report export, and script/MCP package bindings
 - OCR command
 - richer UI Automation selector model
 - peer resource namespace and Slasher-to-Slasher communication
@@ -300,6 +303,43 @@ Take a smaller preview screenshot:
 Invoke-RestMethod http://127.0.0.1:5055/screenshot -Method Post -ContentType application/json -Body '{"maxWidth":1280,"maxHeight":720}'
 ```
 
+Read CSV rows as structured objects:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5055/data/csv/read -Method Post -ContentType application/json -Body '{"path":"data/input.csv","hasHeader":true}'
+```
+
+Query a JSON document with a JSON pointer:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5055/data/json/query -Method Post -ContentType application/json -Body '{"path":"data/config.json","pointer":"/browser/name"}'
+```
+
+Read the first worksheet from an `.xlsx` workbook:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5055/data/excel/read -Method Post -ContentType application/json -Body '{"path":"data/book.xlsx","hasHeader":true}'
+```
+
+Preview a destructive file operation without deleting:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5055/files/delete -Method Post -ContentType application/json -Body '{"path":"C:\\temp\\old.txt","dryRun":true}'
+```
+
+Approve a destructive delete explicitly:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5055/files/delete -Method Post -ContentType application/json -Body '{"path":"C:\\temp\\old.txt","allowDestructive":true}'
+```
+
+Start a file watcher and read its events:
+
+```powershell
+$watcher = Invoke-RestMethod http://127.0.0.1:5055/watchers/files -Method Post -ContentType application/json -Body '{"path":"C:\\temp\\downloads","filter":"*.csv"}'
+Invoke-RestMethod "http://127.0.0.1:5055/watchers/files/$($watcher.watcher.watcherId)/events"
+```
+
 ## Endpoints
 
 - `GET /health`
@@ -368,6 +408,21 @@ Invoke-RestMethod http://127.0.0.1:5055/screenshot -Method Post -ContentType app
 - `GET /automation/runs/{runId}/report`
 - `GET /automation/runs/{runId}/artifacts/raw?path=...`
 - `GET /automation/runs/{runId}/artifacts/content?path=...`
+- `POST /watchers/files`
+- `GET /watchers/files`
+- `GET /watchers/files/{watcherId}/events`
+- `POST /watchers/files/{watcherId}/stop`
+- `POST /data/csv/read`
+- `POST /data/csv/to-json`
+- `POST /data/json/read`
+- `POST /data/json/query`
+- `POST /data/json/write`
+- `POST /data/excel/workbook`
+- `POST /data/excel/read`
+- `GET /peer/hello`
+- `GET /peer/capabilities`
+- `GET /peer/ns`
+- `GET /peer/resource`
 - `POST /scripts/check`
 - `POST /scripts/run`
 - `POST /scripts/run-file`
@@ -382,3 +437,4 @@ Invoke-RestMethod http://127.0.0.1:5055/screenshot -Method Post -ContentType app
 - Windows may reject focus changes from a background process. Calling `/windows/{handle}/focus` from a user-initiated context is more reliable.
 - Elevated apps generally require Slasher itself to run elevated before input/window control works against them.
 - Keep the server bound to `127.0.0.1` unless you have added authentication and network controls.
+- File/folder delete and overwrite-style operations require `allowDestructive=true`; use `dryRun=true` to inspect the resolved operation plan first.

@@ -20,5 +20,11 @@ public static partial class SlasherEndpointExtensions
 
         app.MapPost("/data/json/write", (JsonWriteRequest request, JsonAutomationService json) =>
             Results.Ok(json.Write(request)));
+
+        app.MapPost("/data/excel/workbook", (ExcelReadRequest request, ExcelAutomationService excel) =>
+            Results.Ok(excel.GetWorkbook(request)));
+
+        app.MapPost("/data/excel/read", (ExcelReadRequest request, ExcelAutomationService excel) =>
+            Results.Ok(excel.Read(request)));
     }
 }

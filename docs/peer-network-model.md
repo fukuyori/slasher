@@ -367,7 +367,7 @@ V1 deployment rules:
   "protocolVersion": 1,
   "peerId": "peer_7K4M2Q",
   "displayName": "workstation",
-  "serverVersion": "0.2.4",
+  "serverVersion": "0.2.5",
   "publicKey": "base64-public-key",
   "features": [
     "capability-negotiation",

@@ -32,14 +32,18 @@ builder.Services.Configure<PeerOptions>(builder.Configuration.GetSection("PeerMo
 builder.Services.AddSingleton<WindowsAutomationService>();
 builder.Services.AddSingleton<BrowserAutomationService>();
 builder.Services.AddSingleton<FileSystemAutomationService>();
+builder.Services.AddSingleton<FileWatcherService>();
 builder.Services.AddSingleton<ClipboardService>();
 builder.Services.AddSingleton<CsvAutomationService>();
 builder.Services.AddSingleton<JsonAutomationService>();
+builder.Services.AddSingleton<ExcelAutomationService>();
 builder.Services.AddSingleton<AutomationRunArtifactStore>();
 builder.Services.AddSingleton<ScriptRunService>();
 builder.Services.AddSingleton<PeerIdentityStore>();
 builder.Services.AddSingleton<PeerRegistry>();
 builder.Services.AddSingleton<PeerEndpointService>();
+builder.Services.AddSingleton<NamespaceService>();
+builder.Services.AddSingleton<ResourceReadService>();
 
 var app = builder.Build();
 

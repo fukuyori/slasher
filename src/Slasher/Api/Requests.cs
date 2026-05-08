@@ -163,7 +163,9 @@ public sealed record FileOperationRequest(
     string? Destination = null,
     bool Overwrite = false,
     bool Recursive = false,
-    bool UseRegex = false);
+    bool UseRegex = false,
+    bool DryRun = false,
+    bool AllowDestructive = false);
 
 public sealed record ShortcutRequest(string TargetPath, string ShortcutPath, string? Arguments = null, string? WorkingDirectory = null);
 
