@@ -1,247 +1,166 @@
 # Slasher Implementation Roadmap
 
-Slasher's primary goal is to let AI agents such as Codex operate, test, and
-debug real Windows applications. Its secondary goal is RPA-style local
-automation. Its longer-term architecture should keep the automation core
-portable and allow trusted Slasher peers to expose typed resources through a
-policy-gated namespace.
+> **0.3.0 (2026-05-10) 現在**: Numadora v0.2.1 spec への整合と 5 層 + プラグイン
+> アーキテクチャの実装着手フェーズ。設計は全 19 ドキュメントで整合済、AppOps PR-1
+> Stage 1 (プラグイン契約 + Plugin Registry) まで実装。
+>
+> 詳細リンク:
+> - 言語: `language-system.md` → `numadora-language-spec.md` (v0.2.1)
+> - 5 層構成: `slasher-layer-architecture.md`
+> - プラグイン: `slasher-plugin-architecture.md`
+> - 実装計画: `numadora-migration-plan.md`
+> - セキュリティ: `security-policy.md`
+> - ピア: `peer-network-model.md` / `peer-implementation-plan.md`
+> - 全体スケジュール: `development-schedule.md`
 
-This roadmap is intentionally short. Detailed contracts live in their own
-documents, and the language direction is tracked under `language-system.md`.
-Security rules for the PC-control surface are tracked in
-`security-policy.md`. Peer namespace and portable-core direction is tracked in
-`peer-network-model.md`. The cross-track implementation order is tracked in
-`development-schedule.md`.
+## ゴール (再確認)
 
-## Current Status
+1. **AI エージェント (Codex 等) による Windows アプリの操作・テスト・デバッグ** を支える
+2. RPA スタイルのローカル自動化を整備
+3. 長期的には portable core + 信頼ピア間 namespace を実現
 
-Phase 11 is complete as of commit `7caa579` (`Complete Slasher phase 11`).
+## 1 行サマリ (直近の状態)
 
-The implementation now includes:
+| トラック | 状態 |
+|---|---|
+| Slasher コア機能 (RPA / 評価) | Phase 11 完了、Phase 12 進行中 (CSV/JSON/Excel 完了、scheduling/secrets 未) |
+| Numadora 言語 | **v0.2.1 spec 確定** (ハードカット採用)、`.numai` 13 モジュール宣言済 |
+| 5 層アーキテクチャ | 設計確定 (Api/Core/Io/Network/AppOps)、AppOps PR-1 Stage 1 完了 |
+| ピア機能 | Peer P0〜P5 (read-only namespace まで) 完了、P6 (delegated run) 未 |
 
-- structured script run artifacts, event logs, HTML reports, and artifact readback
-- Web UI and MCP paths that call the shared server-side script runner
-- native window/control tree inspection, native element search/click/text/existence, and element assertions
-- image matching and image-match assertions
-- Selenium WebDriver browser automation for Edge, Chrome, and Firefox
-- browser DOM actions, screenshots, tabs/windows, downloads, selected options, and console log readback
+## 進行中: AppOps PR-1 (5 層 + プラグイン化)
 
-The next implementation focus is Phase 12: practical RPA package expansion on
-top of the completed evidence model. Peer namespace work is a separate
-architecture track and should not weaken the local-first security defaults.
+詳細: `slasher-plugin-architecture.md` 9 章 PR-1〜8 + `numadora-migration-plan.md`。
 
-## Guiding Principles
+| Stage | 内容 | 状態 |
+|---|---|---|
+| **Stage 1** | プラグイン契約 (`IAppOpsPlugin`, `PluginRegistry`) + WindowsNative/Browser shell + Program.cs 起動時登録 | ✅ **完了** |
+| Stage 2 | `Core/AppOps/Abstractions/` interface 定義 (`IAppLauncher`, `IWindowControl`, ...) | 未 |
+| Stage 3 | フォルダ移動 + namespace 一括 rename (`Slasher.Automation` → `Slasher.Core.Numadora` 等、~80 ファイル) | 未 (専用セッション推奨) |
 
-1. AI observability comes first.
-   Every action should produce logs, captures, target metadata, and structured errors.
+その後 `Lang PR-D` (`.numai` ホスト登録機構の C# 実装) → `Lang PR-E` (既存ホスト関数移行) → `Lang PR-F〜H` (Option/MATCH/UFCS/トレーリング ブロック実装) → `Lang PR-B+C` (サンプル + パーサ更新)。
 
-2. Script actions should be libraries, not syntax bloat.
-   New command shapes should map to Numadora modules. Current examples should
-   use names accepted by the existing Numadora implementation, such as
-   `slasher_csv` or `slasher_browser`. Legacy `.slasher` commands are no longer
-   part of the active script surface.
+## 設計フェーズで確定済 (v0.2.1 整合)
 
-3. Web UI, MCP, HTTP, and scripts should share semantics.
-   Avoid adding behavior in one control surface without the corresponding
-   script and documentation shape.
+ハードカット方針 (互換シムなし) で v0.2 → v0.2.1 を直接更新済:
 
-4. Destructive actions must be auditable.
-   Delete, overwrite, close-all, and unattended operations should expose enough
-   parameters and evidence to be reviewed after the run.
+- 言語仕様 v0.2.1 (`numadora-language-spec.md`):
+  - 字句構造 (raw 文字列、行頭演算子、kebab-case + `-` 解決)
+  - 型システム (`OPAQUE TYPE`, ジェネリクス, Option/MATCH, UFCS)
+  - トレーリング ブロック (`DO |x| ... END`)
+  - `EFFECT(class)` 必須化、`INTERACTIVE EFFECT(class)` 必須
+  - `script-requires` (REQUIRES) 宣言
+  - `slasher/peer` モジュール、再帰委譲禁止
+  - 能力クラス 15 種を言語キーワード化 (コンテキスト認識)
+- Slasher 構成:
+  - 5 層 + AppOps プラグイン (NetArchTest で規律強制 16 テスト)
+  - `appsettings.json` の `Plugins:<Name>` セクション
+  - `slasher/peer.numai` 含む 13 ホスト バインディング `.numai`
+  - `verify-numadora-n0.ps1` の v0.2.1 静的検査
 
-5. Security policy moves with capability expansion.
-   New PC-control powers should declare their capability class, audit fields,
-   and redaction behavior before they become broadly available.
+## ガイディング原則
 
-6. Peer namespace work preserves local semantics.
-   A peer-executed action should produce the same conceptual run, event,
-   evidence, policy, and error shapes as a local action, with additional
-   coordinator/executor peer metadata.
+1. **AI 観測性が第一** — 各アクションは log / capture / target metadata / 構造化エラーを出す
+2. **スクリプト アクションはライブラリ** — 構文を増やさず、Numadora モジュールに集約
+3. **Web UI / MCP / HTTP / スクリプトはセマンティクス共有** — どの surface も同じ動作
+4. **破壊操作は audit 可能** — delete / overwrite / close-all / unattended は明示的に
+5. **能力拡張に security policy が伴う** — capability class / audit field / redaction を先決め
+6. **ピア機能はローカル意味論を保つ** — peer-executed action も同じ run/event/evidence/policy/error 形
 
-## Completed Tracks
+## トラック別状態
 
-### Phase A: AI Automation Contract
+### A. Slasher コア (Phase 11/12)
 
-Status: complete.
+完了: 構造化 run artifact, event log, HTML report, native element/UI Automation, image match,
+Selenium browser automation, CSV/JSON/Excel データ API, destructive action approval (`dryRun`/`allowDestructive`),
+file/folder watcher。
 
-Key document: `ai-automation-contract.md`.
+進行中: scheduling, credentials/secrets, report export (Phase 12 残)。
 
-Defines action/result envelopes, event logs, run artifacts, evidence paths,
-structured errors, and MCP response expectations.
+### B. 言語 (Numadora)
 
-### Phase 0: Server Layout Stabilization
+設計: ✅ v0.2.1 spec 確定。
+実装: パーサは v0.1 のまま (Lang PR-B+C 待ち)。`.numai` 13 モジュール宣言済。
 
-Status: complete.
+### C. アーキテクチャ (5 層 + プラグイン)
 
-Key document: `architecture.md`.
+設計: ✅ 確定 (Q-L1〜L6, Q-P1〜P6 すべて採用済)。
+実装: AppOps PR-1 Stage 1 完了 (プラグイン契約)。Stage 2/3 未。
 
-Moved startup and endpoint mapping into a cleaner layout while preserving the
-existing server and Web UI behavior.
+### D. セキュリティ + lineage
 
-### Phase 9: Web And MCP Script Runs
+設計: ✅ v0.2.1 整合 (能力クラス 15 種、INTERACTIVE 承認、再帰委譲禁止)。
+実装: `NumadoraPolicyEvaluator` で観測 + 入力 + 一部の操作系がポリシー判定済。
 
-Status: complete for the current runner.
+### E. ピア機能
 
-Web UI and MCP now use the shared server-side script runner and report model.
+設計: ✅ v0.2.1 整合 (`slasher/peer` モジュール、`PeerRef`, `TrustProfile`, namespace, delegate-run)。
+実装: Peer P0〜P5 (read-only namespace まで) 完了、P6 (delegated run) 未。
 
-### Phase 10: Test Observability
+## トラッキング チェックリスト (v0.3.0 時点)
 
-Status: complete for the current evidence loop.
+### Slasher コア
 
-Key document: `ai-test-observability.md`.
+- [x] Phase A: 自動化契約
+- [x] Phase 0: サーバ レイアウト
+- [x] Phase 9: Web/MCP スクリプト ラン
+- [x] Phase 10: 観測性
+- [x] Phase 11: UI/image/browser 自動化
+- [x] Phase 12 ローカル基盤: CSV/JSON/Excel API
+- [x] Phase 12: 破壊操作の dryRun/allowDestructive
+- [x] Phase 12: file/folder watcher
+- [ ] Phase 12: scheduling
+- [ ] Phase 12: credentials/secrets
+- [ ] Phase 12: report export
 
-Implemented script run reports, logs, screenshots, HTML reports, assertion
-events, readback endpoints, and common diagnostics.
+### 設計 (v0.2.1)
 
-### Phase 11: UI, Image, And Browser Test Automation
+- [x] Numadora 言語 v0.2.1 spec
+- [x] 5 層アーキテクチャ
+- [x] プラグイン契約 + 設定スキーマ
+- [x] セキュリティ・ネットワーク言語統合 (能力クラス + REQUIRES + slasher/peer)
+- [x] ホスト バインディング `.numai` 13 モジュール宣言
+- [x] サンプル `.numa` 6 種 v0.2.1 整合
+- [x] `verify-numadora-n0.ps1` 静的検査
+- [x] NetArchTest 雛形 16 テスト
+- [x] `appsettings.json` の `Plugins:` 設定スケルトン
+- [x] 全 19 ドキュメント v0.2.1 整合
 
-Status: complete for the agreed Phase 11 scope.
+### AppOps PR-1 (5 層 + プラグイン化)
 
-Implemented native element inspection/actions, element assertions, image
-matching, and Selenium WebDriver browser automation.
+- [x] Stage 1: プラグイン契約 + Plugin Registry + WindowsNative/Browser shell
+- [ ] Stage 2: `Core/AppOps/Abstractions/` interface 定義
+- [ ] Stage 3: フォルダ移動 + namespace 一括 rename
+- [ ] `/plugins` HTTP エンドポイント
 
-Deferred follow-ups:
+### 言語実装 (Numadora v0.2.1)
 
-- OCR command
-- richer UI Automation selector model with AutomationId/control patterns
-- context menu item extraction
-- browser DevTools/network capture
+- [ ] Lang PR-B+C: パーサ更新 + サンプル v0.2.1 化
+- [ ] Lang PR-D: `.numai` ホスト登録機構
+- [ ] Lang PR-E: 既存ホスト関数を `.numai` + プラグイン C# クラスに移行
+- [ ] Lang PR-F: `Option[T]` / `MATCH` / `OR FAIL` / `RuntimeError` 実装
+- [ ] Lang PR-G: リソース参照を `OPAQUE TYPE` に切替
+- [ ] Lang PR-H: トレーリング ブロック構文 + UFCS
 
-These are useful, but they are not blockers for Phase 12.
+### ピア機能
 
-## Active Track: Phase 12 RPA Expansion
+- [x] Peer P0: 契約 DTO
+- [x] Peer P1: 識別子 + 手動レジストリ
+- [x] Peer P2: read-only メタデータ エンドポイント
+- [x] Peer P3: read-only namespace listing
+- [x] Peer P4: read-only resource read
+- [x] Peer P5: observe-only resource invoke (進行中、要確認)
+- [ ] Peer P6: observe-only delegated run
+- [ ] Peer P7: portable core 整合 (5 層構成)
+- [ ] Peer P8: interactive resource invoke
+- [ ] Peer P9: discovery + stronger transport
 
-Key document: `phase-12-rpa-expansion-plan.md`.
-Security gate: `security-policy.md`.
+### Lineage / Policy
 
-Priority order:
-
-1. CSV package
-2. JSON package
-3. Excel package
-4. Safer destructive action policy
-5. File/folder watcher package
-6. Scheduling hooks
-7. Credentials/secrets
-8. Report export/distribution
-
-Phase 12 packages should reuse the existing event/report/artifact model. They
-should not introduce separate reporting formats.
-
-## Architecture Track: Portable Core And Peer Namespace
-
-Key document: `peer-network-model.md`.
-Implementation plan: `peer-implementation-plan.md`.
-Security gate: `security-policy.md`.
-
-This track captures the Plan 9/HarmonyOS-inspired direction:
-
-- Plan 9-like resource namespace for Slasher resources
-- HarmonyOS-like coordination across trusted devices
-- portable core models for runs, resources, capabilities, policy, and evidence
-- platform adapters for Windows and future non-Windows or headless peers
-- peer protocol starting with authenticated, read-only namespace inspection
-
-Implementation should follow the `Peer P0` through `Peer P9` phases in
-`peer-implementation-plan.md`, starting with contracts, identity, and read-only
-namespace inspection before delegated runs or interactive operations.
-
-This is not a replacement for Phase 12. It is the architectural path that
-prevents future Slasher-to-Slasher communication from becoming unsafe ad hoc
-remote control.
-
-## Language Track
-
-Key entry point: `language-system.md`.
-Detailed migration plan: `numadora-migration-plan.md`.
-
-Language direction:
-
-- Slasher remains the application and user-facing automation product.
-- Slasher scripts should use Numadora as the unified general-purpose language.
-- Windows automation should be exposed as Slasher-owned, Numadora-facing typed
-  modules and host capabilities.
-- The v1 `.slasher` runner has been removed from the public script surface.
-- The active script target is `.numa`; old `.slasher` scripts are rejected.
-
-The old standalone Slasher Script compiler direction has been removed from the
-active docs. New language work should target Slasher scripts written in
-Numadora:
-
-- `slasher-script.md` defines the current Numadora script profile used by
-  Slasher.
-- `numadora-language-spec.md` defines generic Numadora.
-- `slasher-numadora-integration.md` defines the Slasher server bindings.
-- `migration-from-slasher-v1.md` remains as historical porting reference.
-
-Near-term language work:
-
-1. Decide how this repository locates or invokes the Numadora runtime.
-2. Add implementation-ready `.numa` examples that are not shaped by v1 syntax.
-3. Add current-spec Windows-control module stubs or host bindings for the first
-   useful modules.
-4. Add `.numa` check/run support.
-5. Port any still-useful historical samples to `.numa`.
-6. Keep public script execution Numadora-only.
-
-Security work should run in parallel with N1/N2 so Numadora host bindings can
-carry capability metadata from the beginning.
-
-Build/compile-to-exe support should wait until `.numa` check/run semantics are
-stable.
-
-## Tracking Checklist
-
-- [x] Phase A automation contract
-- [x] Phase 0 server layout stabilization
-- [x] Phase 9 Web/MCP script run migration
-- [x] Phase 10 observability hardening
-- [x] Phase 11 UI/image/browser test automation
-- [ ] Phase 12 RPA expansion
-- [x] Phase 12 local foundation: CSV/JSON/Excel data API slice
-- [x] Phase 12 local foundation: destructive file/folder approval and dry-run slice
-- [x] Phase 12 local foundation: file/folder watcher API slice
-- [x] Peer namespace core contracts
-- [x] Peer identity and metadata endpoints
-- [x] Read-only peer namespace inspection
-- [ ] Observe-only delegated peer run
-- [ ] Portable core extraction
-- [x] Language direction docs
-- [ ] Implementation-ready `.numa` examples
-- [ ] Numadora runtime integration plan
-- [ ] Slasher Numadora module stubs or host bindings
-- [x] Initial `.numa` check dispatch
-- [x] MCP/Web UI language selector for `.numa` check
-- [x] Initial Numadora binding capability metadata
-- [x] Safe `.numa` run preflight
-- [x] Pure `.numa` run artifact path with stdout/stderr logs
-- [x] Web UI run entrypoint for safe `.numa` run path
-- [x] Blocked host-call capability details in `.numa` run artifacts
-- [x] Blocked host-call capability display in MCP/Web UI summaries
-- [x] Diagnostic host-call trace capture from safe Numadora stubs
-- [x] Diagnostic host-call trace display in MCP/Web UI summaries
-- [x] Structured host-call logs on successful safe `.numa` runs
-- [x] Observed safe host calls as `numadora.hostCall` timeline events
-- [x] Lineage-aware Numadora policy plan
-- [x] Initial Numadora run lineage metadata and policy input capture
-- [x] Initial Numadora in-process policy decision capture
-- [x] Numadora policy evaluator allow/deny tests
-- [x] First policy-gated Numadora observe host calls
-- [x] First policy-gated Numadora process/app host call
-- [x] Numadora policy target identity input and missing-target deny
-- [x] Policy-gated Numadora window focus host call
-- [x] Numadora text input host call reaches policy-denied event path
-- [x] Explicit Numadora interactive input approval flag
-- [x] Web UI and MCP opt-in for Numadora interactive input approval
-- [x] Target-revalidated Numadora text input bridge
-- [x] Target-revalidated Numadora key input bridge
-- [x] Target-revalidated Numadora basic mouse input bridge
-- [x] Target-revalidated Numadora wheel and drag input bridge
-- [x] Target-revalidated Numadora context-menu input bridge
-- [x] Numadora screen capture observe bridge
-- [x] Numadora native element observe bridges
-- [x] Numadora browser observe bridges
-- [x] `.numa` check/run support
-- [x] Security policy gates for Numadora host bindings
-- [x] Legacy `.slasher` samples removed from active scripts
-- [x] v1 runner removed from public script entry points
+- [x] 初期 lineage メタデータ + policy input
+- [x] policy evaluator allow/deny テスト
+- [x] interactive 入力承認フラグ
+- [x] target 再検証 (input/keys/mouse/wheel/drag/context-menu)
+- [x] observe-only screen/element/browser bridges
+- [ ] 能力クラス対応への拡張 (Sec PR-F)
+- [ ] 再帰委譲ガード (Sec PR-F)

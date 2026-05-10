@@ -67,10 +67,25 @@ public sealed class NumadoraPolicyEvaluatorTests
     }
 
     [Fact]
-    public void Evaluate_DeniesUserInputWithoutTarget()
+    public void Evaluate_DeniesUserInputWithoutExplicitApproval()
     {
         var decision = _evaluator.Evaluate(
             CreateInput(Capability("slasher_input", "Text", "User-input", "interactive")));
+
+        Assert.False(decision.Allow);
+        Assert.Equal("numadora_policy_interactive_input_not_approved", decision.Code);
+    }
+
+    [Fact]
+    public void Evaluate_DeniesApprovedUserInputWithoutTarget()
+    {
+        var decision = _evaluator.Evaluate(
+            CreateInput(
+                Capability("slasher_input", "Text", "User-input", "interactive"),
+                approvals: new Dictionary<string, object?>
+                {
+                    ["interactiveInput"] = true,
+                }));
 
         Assert.False(decision.Allow);
         Assert.Equal("numadora_policy_missing_target", decision.Code);

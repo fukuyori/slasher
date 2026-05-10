@@ -1,12 +1,25 @@
 MODULE slasher_window
-    EXPORT WaitForTitle, Focus
+    EXPORT WaitForTitle, WaitForApp, Focus, State, Close
 
     FUNC WaitForTitle(title: String, timeoutMs: Int) -> String
         Print("__SLASHER_HOST_CALL__ slasher_window.WaitForTitle " + title + " " + ToString(timeoutMs))
-        RETURN title
+        RETURN "window:last"
     END
 
-    FUNC Focus(handle: Int)
-        Print("__SLASHER_HOST_CALL__ slasher_window.Focus " + ToString(handle))
+    FUNC WaitForApp(appRef: String, title: String, timeoutMs: Int) -> String
+        Print("__SLASHER_HOST_CALL__ slasher_window.WaitForApp " + appRef + " " + title + " " + ToString(timeoutMs))
+        RETURN "window:last"
+    END
+
+    FUNC Focus(target: String)
+        Print("__SLASHER_HOST_CALL__ slasher_window.Focus " + target)
+    END
+
+    FUNC State(target: String, state: String)
+        Print("__SLASHER_HOST_CALL__ slasher_window.State " + target + " " + state)
+    END
+
+    FUNC Close(target: String)
+        Print("__SLASHER_HOST_CALL__ slasher_window.Close " + target)
     END
 END

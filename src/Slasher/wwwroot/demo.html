@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slasher Showcase</title>
+  <link rel="stylesheet" href="/demo.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark">S</span>
+      <div>
+        <p>Slasher 0.3.0</p>
+        <h1>Local Automation Showcase</h1>
+      </div>
+    </div>
+    <div class="service-state">
+      <span id="health-dot"></span>
+      <strong id="health-text">checking</strong>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="control-surface">
+      <div class="surface-head">
+        <div>
+          <p class="eyebrow">Live Scenario</p>
+          <h2>Notepad capture and sample data board</h2>
+        </div>
+        <button id="run-all" class="primary" type="button">Run Showcase</button>
+      </div>
+
+      <div class="quick-actions">
+        <button id="start-notepad" type="button">Start Notepad</button>
+        <button id="type-text" type="button">Type Text</button>
+        <button id="capture-screen" type="button">Capture Screen</button>
+        <button id="run-data" type="button">Load Data</button>
+      </div>
+
+      <div id="showcase-state" class="showcase-state">
+        <strong>Waiting</strong>
+        <span>Press Run Showcase to start the visible demo.</span>
+      </div>
+
+      <label class="field">
+        <span>Text</span>
+        <input id="demo-text" value="Slasher demo: visible local automation">
+      </label>
+
+      <label class="field">
+        <span>Capture monitor</span>
+        <select id="screen-select">
+          <option value="">Virtual screen</option>
+        </select>
+      </label>
+
+      <div class="target">
+        <span>Target window</span>
+        <strong id="selected-window">No window selected</strong>
+      </div>
+
+      <div class="window-strip" id="window-list"></div>
+    </section>
+
+    <section class="evidence-board">
+      <div class="board-head">
+        <div>
+          <p class="eyebrow">Evidence</p>
+          <h2>Screen Preview</h2>
+        </div>
+        <span id="capture-meta">waiting</span>
+      </div>
+      <div class="screenshot-frame">
+        <img id="capture-image" alt="Slasher capture preview">
+        <div id="capture-placeholder">
+          <strong>Capture preview</strong>
+          <span>Run a capture to show the current desktop state.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="data-board">
+      <div class="board-head">
+        <div>
+          <p class="eyebrow">Data Board</p>
+          <h2>Prepared sample files</h2>
+        </div>
+        <span id="data-meta">not loaded</span>
+      </div>
+      <div class="data-grid">
+        <article>
+          <h3>Customers</h3>
+          <div class="table-wrap">
+            <table id="csv-table">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </article>
+        <article>
+          <h3>Workbook</h3>
+          <div class="table-wrap">
+            <table id="excel-table">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <aside class="activity-board">
+      <div class="board-head">
+        <div>
+          <p class="eyebrow">Storyboard</p>
+          <h2>Visible steps</h2>
+        </div>
+        <button id="clear-activity" type="button">Clear</button>
+      </div>
+      <ol id="activity-list"></ol>
+    </aside>
+  </main>
+
+  <script src="/demo.js"></script>
+</body>
+</html>

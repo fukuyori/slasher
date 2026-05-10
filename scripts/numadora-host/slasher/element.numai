@@ -1,0 +1,97 @@
+# Slasher native UI element observation and interaction (UIA / child windows).
+# Provided by WindowsNative plugin (Windows).
+
+MODULE slasher/element
+
+IMPORT slasher/window AS window
+
+--- UI 要素への不透明参照。
+EXPORT OPAQUE TYPE ElementRef
+
+--- 検索のスコープ。foreground = 現在のフォアグラウンド、特定ウィンドウは window-of(...)。
+EXPORT TYPE ElementScope = "foreground" | "all-windows"
+
+--- 文字列マッチ モード。
+EXPORT TYPE MatchMode = "exact" | "contains" | "starts-with" | "ends-with"
+
+--- 要素の観測情報 (info / read-text 等で取得)。
+EXPORT RECORD ElementInfo {
+  --- 表示テキスト or タイトル。
+  title: string,
+  --- ウィンドウ クラス名 (Win32) or UIA ControlType。
+  class-name: string,
+  --- Win32 control id (UIA でなければ -1)。
+  control-id: int,
+  --- 矩形 (画面座標)。
+  x: int,
+  y: int,
+  width: int,
+  height: int,
+  --- 表示中か。
+  is-visible: bool,
+  --- 有効 (enabled) か。
+  is-enabled: bool,
+}
+
+--- 要素ツリー ノード。
+EXPORT RECORD ElementTreeNode {
+  info: ElementInfo,
+  children: array[ElementTreeNode],
+}
+
+--- スコープ内で 1 件目の要素を検索。
+EXPORT EFFECT(observe) FUNC find(
+  scope: ElementScope,
+  title: string,
+  class-name: string,
+  control-id: int,
+  match: MatchMode,
+  max-depth: int,
+  max-results: int
+): Option[ElementRef]
+
+--- 要素の存在を確認 (Boolean)。
+EXPORT EFFECT(observe) FUNC exists(
+  scope: ElementScope,
+  title: string,
+  class-name: string,
+  control-id: int,
+  match: MatchMode,
+  max-depth: int,
+  max-results: int
+): bool
+
+--- 要素のテキストを取得。
+EXPORT EFFECT(observe) FUNC read-text(
+  scope: ElementScope,
+  title: string,
+  class-name: string,
+  control-id: int,
+  match: MatchMode,
+  max-depth: int,
+  max-results: int
+): Option[string]
+
+--- スコープの要素ツリーを取得。
+EXPORT EFFECT(observe) FUNC tree(
+  scope: ElementScope,
+  max-depth: int,
+  max-children: int
+): ElementTreeNode
+
+--- 特定ウィンドウをスコープにする (将来: ElementScope union への WindowRef 追加検討)。
+EXPORT EFFECT(observe) FUNC find-in(
+  parent: window.WindowRef,
+  title: string,
+  class-name: string,
+  control-id: int,
+  match: MatchMode,
+  max-depth: int,
+  max-results: int
+): Option[ElementRef]
+
+--- 要素の観測情報。
+EXPORT EFFECT(observe) FUNC info(target: ElementRef): ElementInfo
+
+--- 要素をクリック (中心座標)。INTERACTIVE。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC click(target: ElementRef): unit

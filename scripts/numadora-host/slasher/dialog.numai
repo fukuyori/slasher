@@ -1,0 +1,26 @@
+# Slasher local dialog (message box, confirm).
+# Provided by WindowsNative plugin (Windows). All functions are INTERACTIVE
+# because they display a local UI to the user.
+
+MODULE slasher/dialog
+
+--- ダイアログ アイコン種別。
+EXPORT TYPE DialogIcon = "info" | "warning" | "error" | "question" | "none"
+
+--- 確認ダイアログのボタン構成。
+EXPORT TYPE ConfirmButtons = "ok-cancel" | "yes-no" | "yes-no-cancel"
+
+--- 確認ダイアログの結果。
+EXPORT TYPE ConfirmResult = "ok" | "cancel" | "yes" | "no"
+
+--- 単純なメッセージ ボックスを表示する。OK ボタンのみ。
+--- run 時に allowInteractiveInput 承認が必要。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC message(title: string, body: string, icon: DialogIcon): unit
+
+--- 確認ダイアログを表示し、ユーザの選択を返す。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC confirm(
+  title: string,
+  body: string,
+  icon: DialogIcon,
+  buttons: ConfirmButtons
+): ConfirmResult

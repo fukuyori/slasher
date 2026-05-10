@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Hosting;
 
 namespace Slasher.Data;
 
@@ -10,11 +11,19 @@ public sealed class JsonAutomationService
         WriteIndented = true
     };
 
+    private readonly string? _contentRoot;
+
+    public JsonAutomationService(IHostEnvironment? environment = null)
+    {
+        _contentRoot = environment?.ContentRootPath;
+    }
+
     public JsonReadResponse Read(JsonReadRequest request)
     {
-        var text = File.ReadAllText(request.Path);
+        var path = ResolvePath(request.Path);
+        var text = File.ReadAllText(path);
         var node = JsonNode.Parse(text) ?? throw new FormatException("JSON input is empty.");
-        return new JsonReadResponse(Path.GetFullPath(request.Path), GetKind(node), node);
+        return new JsonReadResponse(Path.GetFullPath(path), GetKind(node), node);
     }
 
     public JsonQueryResponse Query(JsonQueryRequest request)
@@ -26,10 +35,17 @@ public sealed class JsonAutomationService
 
     public JsonWriteResponse Write(JsonWriteRequest request)
     {
-        var fullPath = Path.GetFullPath(request.Path);
+        var fullPath = Path.GetFullPath(ResolvePath(request.Path));
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath) ?? ".");
         File.WriteAllText(fullPath, request.Value.ToJsonString(SerializerOptions));
         return new JsonWriteResponse(fullPath, true);
+    }
+
+    private string ResolvePath(string path)
+    {
+        return Path.IsPathRooted(path) || string.IsNullOrWhiteSpace(_contentRoot)
+            ? path
+            : Path.Combine(_contentRoot, path);
     }
 
     private static JsonNode? Select(JsonNode node, string pointer)

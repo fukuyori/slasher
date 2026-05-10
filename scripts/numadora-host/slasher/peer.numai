@@ -1,0 +1,108 @@
+# Slasher peer-to-peer communication.
+# Provided by Network layer hosting.
+# All functions involve outbound network traffic; delegation requires peer-delegate capability.
+#
+# Recursive delegation is forbidden at runtime: a run started via delegate-run cannot
+# itself call delegate-run (policy_recursive_delegation).
+
+MODULE slasher/peer
+
+--- 信頼プロファイル (security-policy.md 由来)。
+EXPORT TYPE TrustProfile = "known" | "observed" | "interactive"
+
+--- 登録済ピアへの不透明参照。
+EXPORT OPAQUE TYPE PeerRef
+
+--- ピアの観測情報。
+EXPORT RECORD PeerInfo {
+  --- ピア名 (登録時に付けた識別子)。
+  name: string,
+  --- 信頼プロファイル。
+  trust-profile: TrustProfile,
+  --- ピアのエンドポイント (例: "http://192.168.1.100:5055")。
+  endpoint: string,
+  --- 現在到達可能か。
+  is-online: bool,
+  --- ピアの Slasher バージョン (取得できる場合)。
+  version: Option[string],
+}
+
+--- ピアの名前空間エントリ (peer-network-model.md 参照)。
+EXPORT RECORD NamespaceEntry {
+  --- エントリ名 (例: "windows", "screen", "files")。
+  name: string,
+  --- リソース種別 (例: "windows", "screen", "input", ...)。
+  kind: string,
+  --- 読み取り可能か (信頼プロファイル次第)。
+  is-readable: bool,
+  --- 操作呼び出し可能か。
+  is-invokable: bool,
+}
+
+--- ピア能力情報 (このピアが提供する能力宣言)。
+EXPORT RECORD PeerCapabilities {
+  --- ピアが提供する Numadora モジュール (例: ["slasher/window", "slasher/input"])。
+  host-modules: array[string],
+  --- ピアが受理する能力プロファイル (例: ["observe", "interactive"])。
+  accepted-profiles: array[string],
+}
+
+--- 委譲 run のステータス。
+EXPORT RECORD DelegateStatus {
+  --- 委譲 run の ID (delegate-run 戻り値と同じ)。
+  run-id: string,
+  --- "pending" | "running" | "succeeded" | "failed" | "timed-out"。
+  state: string,
+  --- 完了済の場合の終了コード (未完了なら None)。
+  exit-code: Option[int],
+  --- エラーがあれば code、なければ None。
+  error-code: Option[string],
+}
+
+# --- 観測 (network-out のみ、peer-delegate なし) ---
+
+--- 登録済の全ピアを列挙。
+EXPORT EFFECT(network-out) FUNC list-peers(): array[PeerInfo]
+
+--- ピア名で参照を取得。
+EXPORT EFFECT(network-out) FUNC find-peer(name: string): Option[PeerRef]
+
+--- ピアの観測情報を取得。
+EXPORT EFFECT(network-out) FUNC info(target: PeerRef): PeerInfo
+
+--- ピアの能力情報を取得。
+EXPORT EFFECT(network-out) FUNC capabilities(target: PeerRef): PeerCapabilities
+
+--- ピアの名前空間 (path 配下) を一覧。
+--- 例: namespace-list(target, "/") でルート、"/windows" でウィンドウ一覧。
+EXPORT EFFECT(network-out) FUNC namespace-list(target: PeerRef, path: string): array[NamespaceEntry]
+
+--- ピアの名前空間内のリソースを読む (read-only 操作)。
+--- 戻り値は JSON 文字列 (リソース種別ごとに構造が異なる)。
+EXPORT EFFECT(network-out) FUNC namespace-read(target: PeerRef, path: string): string
+
+# --- 委譲 (network-out + peer-delegate、INTERACTIVE) ---
+
+--- ピアにスクリプトを委譲して実行する。
+--- script: 実行する .numa スクリプトのソース全体
+--- required-profile: ピア側で要求する能力プロファイル ("observe" / "interactive" 等)
+--- purpose: 実行の意図 (lineage 用)
+--- 戻り値: 委譲 run の ID (delegate-status で進捗確認可)
+---
+--- 委譲経由で起動された run はさらに delegate-run を呼べない (policy_recursive_delegation)。
+EXPORT INTERACTIVE EFFECT(network-out, peer-delegate) FUNC delegate-run(
+  target: PeerRef,
+  script: string,
+  required-profile: string,
+  purpose: string
+): string
+
+--- 委譲 run のステータスを取得。
+EXPORT EFFECT(network-out) FUNC delegate-status(target: PeerRef, run-id: string): Option[DelegateStatus]
+
+--- 委譲 run の完了を最大 timeout-ms ミリ秒待つ。
+--- 完了していれば Some(status)、タイムアウトなら None。
+EXPORT EFFECT(network-out) FUNC delegate-wait(target: PeerRef, run-id: string, timeout-ms: int): Option[DelegateStatus]
+
+--- 委譲 run のログ/イベントを取得 (run artifact 相当)。
+EXPORT EFFECT(network-out) FUNC delegate-fetch-log(target: PeerRef, run-id: string): string

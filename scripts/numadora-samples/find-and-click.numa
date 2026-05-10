@@ -1,0 +1,37 @@
+# Slasher v0.2 sample: Option[T] handling with OR FAIL and OR DEFAULT.
+#
+# Demonstrates:
+# - element.find returns Option[ElementRef]
+# - OR FAIL with CODE and DETAILS for actionable error
+# - OR DEFAULT for graceful fallback
+# - MATCH on Option[T] for explicit handling
+# - element.click is INTERACTIVE
+#
+# Requires Numadora v0.2. Run prerequisite: allowInteractiveInput = true.
+
+MODULE find-and-click
+REQUIRES (observe, user-input)
+
+IMPORT slasher/element AS element
+IMPORT slasher/io AS io
+
+EXPORT FUNC main()
+  io.step("look for OK button (fail-fast)")
+  LET ok = element.find("foreground", "OK", "-", -1, "contains", 8, 1)
+             OR FAIL "OK button not found in foreground window"
+             CODE "ok_button_missing"
+             DETAILS { searched-title: "OK", scope: "foreground" }
+
+  io.step("click OK")
+  ok.click()
+
+  io.step("look for optional Help link (graceful)")
+  LET maybe-help = element.find("foreground", "Help", "-", -1, "contains", 8, 1)
+  MATCH maybe-help OF
+  CASE Some(help) THEN
+    io.log("Help link found, clicking")
+    help.click()
+  CASE None THEN
+    io.log("Help link not present, skipping")
+  END
+END

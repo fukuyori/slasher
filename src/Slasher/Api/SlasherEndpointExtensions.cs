@@ -71,6 +71,7 @@ public static partial class SlasherEndpointExtensions
                 "POST /input/keys",
                 "POST /input/text",
                 "POST /input/mouse",
+                "GET /screens",
                 "POST /screenshot",
                 "POST /screen/image-match",
                 "POST /automation/runs",

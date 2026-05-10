@@ -1,8 +1,17 @@
 # Slasher 0.2.3 Handoff
 
-This is a historical handoff snapshot. For current direction, use
-`implementation-roadmap.md`, `language-system.md`, `security-policy.md`, and
-`peer-network-model.md`.
+> **Historical snapshot (2026-04, v0.2.3)**. 本ドキュメント以降の言語/設計は
+> Numadora v0.2 へ移行している。v0.2 の正規ドキュメントは:
+>
+> - `language-system.md` - 言語方針エントリ
+> - `numadora-language-spec.md` - 言語仕様 v0.2
+> - `slasher-layer-architecture.md` - 5 層構成
+> - `slasher-plugin-architecture.md` - AppOps プラグイン
+> - `slasher-script.md` / `slasher-numadora-integration.md` - Slasher 統合
+>
+> 本ドキュメントの `slasher_xxx` snake_case モジュール名、PascalCase 関数名、
+> `:=` 区切り、Rust プロトタイプ言及は **v0.2 では更新済**。v0.2.3 当時の状態
+> 記録としてのみ残す。
 
 Last confirmed commit:
 
@@ -49,11 +58,11 @@ N0 probe passed: baseline and Slasher current-spec sample both check successfull
 
 N0 confirms:
 
-- local Numadora discovery works through `NUMADORA_HOME` or
-  `D:\home\source\rust\Numadora`
-- Slasher can invoke Numadora check through `scripts/check-numadora.ps1`
+- Slasher owns the Numadora check/run path in C#.
+- `scripts/check-numadora.ps1` checks through Slasher's HTTP API, not through
+  a Rust checkout.
 - `scripts/numadora-samples/notepad-check.numa` checks successfully with the
-  current Numadora implementation
+  current Slasher-supported Numadora profile.
 
 ## Key Documents
 
@@ -94,8 +103,7 @@ Implemented after the `d02fec4 0.2.0` commit:
 
 - `POST /scripts/check` can dispatch `.numa` paths by extension.
 - Inline check requests can set `language: "numadora"`.
-- Numadora check uses the local Numadora checkout through Cargo and writes
-  Cargo artifacts under `.numadora-targets/check`.
+- Numadora check uses Slasher's C# runtime.
 - MCP check and run tools accept
   `language: "numadora"`.
 - The Web UI script checker and runner use the Slasher/Numadora selector.

@@ -1,0 +1,43 @@
+# Slasher keyboard / mouse input.
+# Provided by WindowsNative plugin (Windows). Future: MacOSNative, LinuxNative.
+# All functions are INTERACTIVE: require allowInteractiveInput approval at run time.
+
+MODULE slasher/input
+
+--- マウス アクション。
+EXPORT TYPE MouseAction = "click" | "double-click" | "right-click" | "down" | "up" | "move"
+
+--- マウス ボタン。
+EXPORT TYPE MouseButton = "left" | "right" | "middle"
+
+--- 文字列を入力する (フォアグラウンド ターゲットへ送信)。
+--- run 時に allowInteractiveInput 承認が必要、未承認なら policy_denied。
+--- 承認済でも送信直前にフォアグラウンドを再検証し、変わっていれば fail closed。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC text(content: string): unit
+
+--- キー組み合わせを送信する (例: "CTRL+S", "ALT+F4", "ENTER")。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC keys(combination: string): unit
+
+--- マウス操作。
+--- action = "click" / "double-click" / "right-click" / "down" / "up" / "move"
+--- button = "left" / "right" / "middle"
+EXPORT INTERACTIVE EFFECT(user-input) FUNC mouse(action: MouseAction, x: int, y: int, button: MouseButton): unit
+
+--- マウス ホイール。delta が正で上方向、負で下方向 (慣例: 120 = 1 ノッチ)。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC wheel(x: int, y: int, delta: int): unit
+
+--- マウス ドラッグ ((from-x, from-y) → (to-x, to-y))。
+--- duration-ms はドラッグ全体の時間、steps は中間ステップ数。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC drag(
+  from-x: int,
+  from-y: int,
+  to-x: int,
+  to-y: int,
+  button: MouseButton,
+  duration-ms: int,
+  steps: int
+): unit
+
+--- 右クリック → 短い遅延 → 何もしない (コンテキスト メニュー表示用)。
+--- delay-ms は右クリック後にメニューが落ち着くまで待つ時間。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC context-menu(x: int, y: int, delay-ms: int): unit

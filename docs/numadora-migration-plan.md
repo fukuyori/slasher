@@ -1,444 +1,168 @@
 # Numadora Integration And Migration Plan
 
-This plan describes how the Slasher application uses Numadora for broad
-Windows-control scripts after retiring the v1 `.slasher` command runner from
-public script entry points.
+Slasher が Numadora v0.2 を統合・実装するための実装計画。
 
-It is an implementation plan, not a user migration guide. For user-facing
-syntax rewrites, see `migration-from-slasher-v1.md`.
-For security rules that apply to Numadora host bindings, see
-`security-policy.md`. For lineage-aware host-call policy derived from
-`information_lineage_paper.md`, see `numadora-lineage-policy-plan.md`.
+これは実装プランであり、ユーザ移行ガイドではない。利用者向けの構文書き換えは
+`migration-from-slasher-v1.md`、言語仕様は `numadora-language-spec.md`、
+セキュリティ規則は `security-policy.md`、lineage-aware ポリシーは
+`numadora-lineage-policy-plan.md` を参照。
 
 ## Goals
 
-- Make Numadora `.numa` the unified script path.
-- Keep Slasher as the application and user-facing product name.
-- Treat Numadora as a general-purpose language with typed Windows-control
-  libraries, not as a Slasher v1 compatibility layer.
-- Preserve the current run artifact model: `run.json`, `events.jsonl`,
-  `summary.txt`, `report.html`, screenshots, logs, and structured errors.
-- Reuse the Slasher server's existing automation APIs instead of rebuilding GUI
-  automation inside the language runtime.
-- Make Windows automation capabilities available as typed Numadora modules
-  using names accepted by the current Numadora implementation, starting with
-  `slasher_app`, `slasher_window`, `slasher_input`, `slasher_io`, and
-  `slasher_test`.
-- Keep new RPA package work compatible with future Numadora module names.
-- Reject v1 `.slasher` scripts from public script check/run APIs.
-- Provide migration tooling only if it materially speeds up porting important
-  samples or user scripts.
+- Numadora `.numa` v0.2 を統一スクリプト パスにする
+- Slasher をアプリケーション名・ユーザ向けプロダクト名として保持
+- Numadora を汎用言語として扱い、外部アプリケーション制御を **AppOps プラグイン**
+  経由のホスト能力として提供 (`slasher-plugin-architecture.md`)
+- 現行 run artifact モデル (`run.json`, `events.jsonl`, `summary.txt`,
+  `report.html`, screenshots, logs) を保持
+- Slasher の既存自動化 API を活用し、言語ランタイム内に GUI 自動化を再構築しない
+- v1 `.slasher` を public script API から拒否 (Q-L3 ハードカット完了)
 
 ## Non-Goals
 
-- Do not build a second standalone Slasher language.
-- Do not let v1 command spelling define Numadora's module, function, or macro
-  design.
-- Do not start with compile-to-exe support. Build support should wait until
-  `.numa` check/run semantics are stable.
-- Do not require complete v1 feature parity before switching new development
-  to `.numa`.
+- Slasher 専用の第二言語を作らない
+- v1 コマンド表記で Numadora の module / function / 構文設計を縛らない
+- compile-to-exe は対象外 (`.numa` の check/run が安定した後に検討)
+- v1 完全機能パリティを `.numa` 移行のブロッカーとしない
 
-## Current Baseline
+## Current Baseline (v0.2)
 
-The current v1 runner has useful behavior that informs the host capabilities:
+確定済の設計成果物 (このプランの前提):
 
-- line-oriented commands with variable assignment using `as`
-- `include`, function blocks, local/file/global variable scopes
-- arrays, `foreach`, `try/catch/finally`, assertions, and test steps
-- server-side run/check endpoints
-- event logs, reports, screenshot evidence, and artifact readback
-- native element commands, image matching, browser automation, file commands,
-  clipboard commands, and mouse/keyboard/window commands
-
-The migration should preserve the evidence loop, not the v1 language surface.
-Syntax, module boundaries, and command names should change when the Numadora
-shape is cleaner and more general.
+- `numadora-language-spec.md` v0.2 - 言語仕様 (canonical)
+- `numadora-language-redesign.md` - 再構成方針 (アンカー、`.numai` ホスト、マクロなし、UFCS、トレーリング ブロック)
+- `numadora-base-structure.md` - 字句 + 意味の詳細
+- `numadora-core-systems.md` - 型 / モジュール / 実行モデル
+- `slasher-layer-architecture.md` - 5 層構成 (Api/Core/Io/Network/AppOps)
+- `slasher-plugin-architecture.md` - AppOps プラグイン契約
+- `slasher-script.md` - スクリプト プロファイル
+- `slasher-numadora-integration.md` - 実装契約
+- `numadora-runtime-contract.md` - check/run HTTP 境界
 
 ## Target Architecture
 
 ```text
 AI / user
-  |
-  | .numa
-  v
-Numadora runtime / bridge
-  |
-  v
-Slasher server APIs
-  |
-  v
+  │
+  │ .numa (v0.2)
+  ▼
+Slasher Api (HTTP / MCP / CLI / Web UI)
+  │
+  ▼
+Slasher Core (C# Numadora interpreter, run artifact, policy)
+  │
+  ▼
+AppOps Plugin Host
+  ├── WindowsNative (slasher/window, /input, /screen, /element, /dialog, /app)
+  ├── Browser      (slasher/browser, Selenium)
+  ├── (将来) Excel  (slasher/excel)
+  ├── (将来) GIMP   (slasher/gimp)
+  └── ...
+  │
+  ▼
 shared run artifacts
 ```
 
-The first Numadora implementation can be a bridge to an external Numadora CLI
-or process. The v1 `ScriptRunService` can remain temporarily as a reference and
-fallback during development, but it is not a long-term compatibility target.
-Embedding the runtime can be revisited after the first `.numa` vertical slice
-is working.
+旧 Rust Numadora プロトタイプは設計参照のみ。実行時に呼ばれない。
 
-## Phase N0: Runtime Discovery And Contract Freeze
+## v0.2 PR Plan (実装フェーズ)
 
-Purpose: decide how Slasher will invoke Numadora and freeze the first boundary.
+`slasher-plugin-architecture.md` 9 章 と `numadora-language-redesign.md` 9 章 を
+統合した PR シーケンス。
 
-Status: complete.
+### AppOps / 5 層構成系
 
-Deliverables:
+| PR | 内容 | 依存 |
+|---|---|---|
+| **AppOps PR-1** | フォルダ移動 + namespace + interface 分割 + プラグイン契約 + 既存 Windows コードを WindowsNativePlugin / BrowserPlugin に再配置 (ハードカット 1 PR) | (前提) |
+| **AppOps PR-2** | NetArchTest 導入と依存方向ルール (`slasher-layer-architecture.md` 4 章) | PR-1 |
+| **AppOps PR-3** | DI を PluginHost ベースに、OS 検出と CheckAvailability | PR-1 |
+| **AppOps PR-4** | `[SupportedOSPlatform("windows")]` + `UnsupportedXxx` スタブ | PR-3 |
+| **AppOps PR-5** | self-contained single-file publish (Windows) CI | PR-1 |
+| **AppOps PR-6** | Mac/Linux 用 publish ジョブ (Browser のみ動作) | PR-4, PR-5 |
+| **AppOps PR-7** | trimming 検証 + トリマー設定 | PR-5 |
+| **AppOps PR-8** | `/plugins` エンドポイントとプラグイン状態 HTTP 公開 | PR-3 |
 
-- documented Numadora invocation strategy: `numadora-runtime-contract.md`
-- minimal `.numa` check command contract: `numadora-runtime-contract.md`
-- minimal `.numa` run command contract: `numadora-runtime-contract.md`
-- decision on where Slasher host binding notes live in this repository:
-  `numadora-bindings/slasher/`
-- first test fixture directory for `.numa` examples:
-  `scripts/numadora-samples/`
-- compatibility path decision: adapt Slasher's Numadora-facing implementation
-  to current Numadora syntax, do not add a Slasher-side source adapter
+### 言語実装系 (Numadora v0.2)
 
-Recommended decisions:
+| PR | 内容 | 依存 |
+|---|---|---|
+| **Lang PR-A** | spec 改訂 (v0.2) | (完了 - `numadora-language-spec.md`) |
+| **Lang PR-B+C** | サンプル `.numa` の v0.2 書き換え + パーサ更新 (ハードカット 1 PR) | PR-A |
+| **Lang PR-D** | `.numai` ホスト登録機構の C# 側実装 (属性 + 起動時リンク) | PR-C, AppOps PR-1 |
+| **Lang PR-E** | 既存ホスト関数を `.numai` + プラグイン C# クラスに移行 | PR-D, AppOps PR-1 |
+| **Lang PR-F** | `Option[T]` / `MATCH` / `OR FAIL` / `RuntimeError` のインタプリタ実装 | PR-C |
+| **Lang PR-G** | リソース参照を `OPAQUE TYPE` に切替 (`"window:last"` 文字列廃止) | PR-D, PR-F |
+| **Lang PR-H** | トレーリング ブロック構文 + UFCS の実装 | PR-C |
+| **Lang PR-J** | 統合ドキュメントの v0.2 整合 | (完了 - 本ドキュメント, `slasher-script.md`, `slasher-numadora-integration.md`) |
 
-- Add `numadora-bindings/slasher/` for Slasher-owned host binding notes.
-- Add `scripts/numadora-samples/` for `.numa` examples.
-- Use a process bridge for the first slice unless an embedded API already
-  exists and is cheap to call.
-- Return diagnostics in the same shape as `POST /scripts/check` where possible:
-  code, message, file, line, column, command, and actionable hints.
+### 推奨実施順 (依存解消順)
 
-Exit criteria:
-
-- A developer can run a documented command that checks a trivial `.numa` file.
-- The repository has a stable place for Slasher binding files and examples.
-
-Current N0 findings:
-
-- local source checkout discovery is documented in
-  `numadora-runtime-contract.md`
-- `scripts/check-numadora.ps1` can invoke the local Numadora checkout
-- Numadora 0.0.1 can check its own `examples/module.numa`
-- Slasher's target `scripts/numadora-samples/notepad-check.numa` checks
-  successfully after adapting it to current Numadora syntax
-- `scripts/verify-numadora-n0.ps1` captures the N0 verification state
-
-Non-blocking follow-up work moved to later phases:
-
-- packaged/release Numadora executable discovery: packaging work
-- event streaming and host-call transport details for run mode: N3
-- replacing sample stub modules with real host bindings: N1/N2
-- lineage-aware host-call policy input and enforcement: N3/L0-L3 in
-  `numadora-lineage-policy-plan.md`
-
-## Phase N1: Binding Skeleton
-
-Purpose: expose the smallest useful Windows-control surface as Numadora modules.
-
-Current status: initial binding capability metadata is implemented for the N0
-modules. Check mode can report recognized `requiredCapabilities` for
-alias-qualified calls, but the modules are still source-level stubs and run
-mode does not yet enforce policy profiles.
-
-Initial current-Numadora modules:
-
-- `slasher_io`
-- `slasher_app`
-- `slasher_window`
-- `slasher_input`
-- `slasher_test`
-
-Initial current-Numadora module shapes should cover:
-
-```numadora
-IMPORT slasher_app AS app
-IMPORT slasher_window AS win
-IMPORT slasher_input AS input
-IMPORT slasher_io AS io
-IMPORT slasher_test AS test
-
-FUNC main()
-    io.Step("open notepad")
-    LET handle := app.Start("notepad.exe")
-    LET title := win.WaitForTitle("Notepad", 10000)
-    win.Focus(handle)
-    input.Text("hello")
-    test.AssertForegroundTitle("contains", title)
-END
+```
+1. AppOps PR-1 (層分割 + プラグイン契約)
+2. AppOps PR-2 (規律テスト)
+3. AppOps PR-3 (PluginHost と DI)
+4. Lang PR-D (.numai ホスト登録)
+5. Lang PR-E (既存ホスト関数移行)
+6. Lang PR-F (Option/MATCH/OR FAIL)
+7. Lang PR-G (OPAQUE TYPE 切替)
+8. Lang PR-H (トレーリング ブロック + UFCS)
+9. Lang PR-B+C (サンプル書換 + パーサ v0.2 専用化)
+10. AppOps PR-4〜8 (OS 属性、配布、/plugins エンドポイント)
 ```
 
-Implementation notes:
+## Acceptance Criteria
 
-- Use current Numadora alias-qualified function calls in reference examples.
-- Do not add bare command support unless Numadora itself grows that feature.
-- Map Slasher operational errors to Numadora `RuntimeError`.
-- Use current Numadora error/nullability constructs first; introduce
-  `Option<T>` only when the runtime supports it.
-- Assign initial capability metadata for each binding, following
-  `security-policy.md`.
+各 PR の合格基準は `slasher-plugin-architecture.md` 9 章および
+`numadora-language-redesign.md` 9 章にある。共通基準:
 
-Exit criteria:
+- 既存の `dotnet test` (NetArchTest 含む) が緑
+- `/health`, `/scripts/check`, `/scripts/run` の HTTP 動作回帰なし
+- 既存の MCP ツール (`slasher_check_script` 等) が動作
+- run artifact (`run.json`, `events.jsonl`, `report.html`) のスキーマ互換維持
+- 重要サンプル (`scripts/numadora-samples/notepad-check.numa` 等) が check/run できる
 
-- Binding files exist for the initial modules.
-- The first Notepad `.numa` sample can be statically checked.
-- The binding names match `slasher-script.md` and
-  `slasher-numadora-integration.md`.
-- The initial bindings have documented capability classes.
+## Migration Tooling
 
-## Phase N2: Check Integration
+`slasher migrate` コマンド (将来) はドラフトと移行レポートを生成する位置付け。
+完全自動変換は約束しない。詳細は `migration-from-slasher-v1.md` の Tooling 節。
 
-Purpose: let Slasher validate `.numa` scripts without running GUI actions.
+`.slasher` 削除は既に完了 (Q-L3 ハードカット) しており、tooling の有無は移行の
+ブロッカーではない。
 
-Current status: initial check-only dispatch is implemented. `POST
-/scripts/check` now accepts `.numa` files by extension and inline scripts with
-`language: "numadora"`, invokes the local Numadora checkout through Cargo, and
-returns Slasher `ScriptCheckResponse` diagnostics without executing GUI
-actions. MCP check tools and the Web UI script checker can pass the same
-language selector. Representative Numadora failures are classified as
-`numadora_import_failed`, `numadora_unknown_symbol`, and
-`numadora_type_mismatch` when the current Numadora stderr shape exposes those
-cases.
+## Risks
 
-Deliverables:
-
-- `POST /scripts/check` accepts `.numa` files or a language selector.
-- MCP check path can report Numadora diagnostics.
-- Web UI can show Numadora check diagnostics.
-- `scripts/numadora-samples/notepad-check.numa`
-- tests for successful check and representative diagnostics
-
-Design rules:
-
-- Do not execute Slasher actions in check mode.
-- Preserve file and line mapping.
-- Diagnostics should be useful to AI agents: include fix hints when possible.
-- If Numadora diagnostics are richer than v1 diagnostics, keep the richer data
-  in `details` while preserving the public check response shape.
-
-Exit criteria:
-
-- `check` works for at least one valid `.numa` sample.
-- `check` reports syntax, import, unknown symbol, and type mismatch failures.
-- Existing v1 `.slasher` check behavior may be removed once `.numa` check is
-  available and documented.
-
-## Phase N3: Run Integration Vertical Slice
-
-Purpose: execute a small `.numa` script through the existing Slasher server and
-produce normal run artifacts.
-
-Current status: run requests can enter the Numadora path and produce normal
-Slasher run artifacts. The current path runs Numadora check first, then can run
-pure Numadora scripts, or scripts limited to the temporary `slasher_io` stub
-surface, through the local Numadora CLI and capture stdout/stderr as Slasher
-logs. Structured stub output is parsed into event `hostCalls` and
-`numadora.hostCall` log entries, and each observed safe host call is appended
-as a `numadora.hostCall` timeline event. Policy-gated local host execution now
-covers `slasher_io.*`, `slasher_screen.Capture`, observe-only
-`slasher_element.Find`, `slasher_element.Exists`, `slasher_element.ReadText`,
-`slasher_element.Tree`, observe-only `slasher_browser.Current`,
-`slasher_browser.Title`, `slasher_browser.Url`, `slasher_browser.Locate`,
-`slasher_browser.DomText`, `slasher_browser.Attribute`,
-`slasher_browser.Screenshot`, `slasher_browser.Links`,
-`slasher_browser.Windows`, `slasher_window.WaitForTitle`,
-`slasher_test.AssertForegroundTitle`, `slasher_app.Start`,
-`slasher_window.Focus`, opt-in `slasher_input.Text`, and opt-in
-`slasher_input.Keys`, opt-in `slasher_input.Mouse`, opt-in
-`slasher_input.Wheel`, opt-in `slasher_input.Drag`, and opt-in
-`slasher_input.ContextMenu`. Scripts that require browser mutation/data APIs,
-file, clipboard, or other non-enabled host-call bindings still fail with
-`numadora_run_not_implemented`.
-Invalid scripts fail with `numadora_check_failed` before any GUI action can run.
-MCP run tools and the Web UI script runner pass the same `language` selector.
-Blocked host-call runs include `blockedCapabilities`, `allowedLocalModules`,
-`allowedLocalHostCalls`, and `runMode` details so the next host bridge can
-attach policy decisions without changing the outer run artifact shape. MCP run
-summaries and the Web UI diagnostics panel surface both the blocked capability
-list and the diagnostic `hostCalls` trace. The current blocked path also runs
-the safe Numadora stub modules to capture that trace; it records call order and
-arguments but still does not execute GUI actions.
-Current runs also carry the first lineage/policy artifacts from
-`numadora-lineage-policy-plan.md`: optional `purpose`, script SHA-256 lineage
-metadata, per-host-call `policyInput` objects, and diagnostic
-`policyDecision` results from the in-process evaluator. Real local host calls
-execute only after the in-process evaluator allows them. Text/key/mouse input also
-requires explicit `allowInteractiveInput` approval and foreground target
-revalidation.
-
-First scenario:
-
-```numadora
-IMPORT slasher_app AS app
-IMPORT slasher_window AS win
-IMPORT slasher_input AS input
-IMPORT slasher_io AS io
-IMPORT slasher_test AS test
-
-FUNC main()
-    io.Step("open notepad")
-    LET handle := app.Start("notepad.exe")
-    LET title := win.WaitForTitle("Notepad", 10000)
-    win.Focus(handle)
-
-    io.Step("type text")
-    input.Text("Slasher Numadora smoke")
-    test.AssertForegroundTitle("contains", title)
-END
-```
-
-Deliverables:
-
-- `.numa` run endpoint path
-- shared run artifact creation for Numadora runs
-- command events emitted for each Slasher API call
-- error events with source file/line and evidence
-- one automated smoke test for a non-GUI or mocked action path
-
-Implementation notes:
-
-- The Numadora runtime should call Slasher through a narrow host interface, not
-  by duplicating automation logic.
-- If the first runtime bridge cannot stream command events, collect enough data
-  to emit standard Slasher automation events after each host call.
-- The run report should clearly show `language: "numadora"` or equivalent
-  metadata.
-
-Exit criteria:
-
-- A `.numa` script can create the standard Slasher artifact family.
-- Failed Numadora commands include file/line diagnostics and evidence.
-- Existing v1 `.slasher` run behavior may be removed after this path is stable.
-
-## Phase N4: Module Coverage Expansion
-
-Purpose: cover enough Slasher functionality for real AI-driven tests.
-
-Expansion order:
-
-1. `slasher_screen`: capture, image-match, wait-stable
-2. `slasher_element`: tree, find, click, text, exists
-3. `slasher_browser`: launch/open, navigate, find, click, type, press,
-   screenshot, logs, downloads
-4. `slasher_file`, `slasher_folder`, `slasher_clipboard`
-5. Phase 12 packages as they land: `slasher_csv`, `slasher_json`,
-   `slasher_excel`
-
-For each module:
-
-- add current-spec module signatures
-- add at least one `.numa` sample
-- add check tests for signatures
-- add run tests where practical
-- update `slasher-numadora-integration.md`
-- update migration notes when an old scenario has a useful Numadora expression
-
-Exit criteria:
-
-- Important smoke scenarios have `.numa` equivalents or documented blockers.
-- AI agent guide points new script authoring to `.numa`.
-
-## Phase N5: Command Macro Library
-
-Purpose: add optional ergonomic macros only after the ordinary Numadora module
-surface is working.
-
-Deliverables:
-
-- `slasher_control.numa` macros such as `WithWindow`, `Retry`, `WaitUntil`
-- macros for high-frequency side effects, only where they improve Numadora as a
-  whole
-- macro expansion trace in events
-- source mapping from macro call site to expanded Slasher calls
-
-Policy:
-
-- Canonical examples stay alias-qualified.
-- Bare commands can be provided through an explicit Slasher prelude.
-- Macros must be transparent enough for AI agents to debug failures.
-- Macro design must not be driven by old `.slasher` compatibility.
-
-Exit criteria:
-
-- The Notepad smoke script can be written in the preferred ergonomic style.
-- Macro failures point back to the user's `.numa` line, not only expansion code.
-
-## Phase N6: Porting Tooling
-
-Purpose: help port important `.slasher` examples into `.numa` when automation is
-cheaper than manual rewrite.
-
-Command shape:
-
-```powershell
-slasher migrate scripts\samples\ai-agent-smoke.slasher -o scripts\numadora-samples\ai-agent-smoke.numa
-```
-
-Optional conversion scope:
-
-- add required `IMPORT` statements
-- map common commands to alias-qualified Numadora calls
-- rewrite `set`, `array`, `foreach`, `if`, `try/catch/finally`
-- rewrite `include` to `IMPORT` when the target can become a module
-- preserve unsupported lines as explicit `TODO` comments with source line
-  references
-
-Required outputs:
-
-- generated `.numa`
-- migration report listing automatic rewrites, TODOs, and manual risks
-- optional side-by-side summary for AI review
-
-Exit criteria:
-
-- Important sample scripts have `.numa` replacements.
-- Any generated files pass `check` when the source uses only supported patterns.
-- Unsupported patterns fail loudly in the migration report, not silently.
-
-## Phase N7: Switchover And v1 Removal
-
-Purpose: make `.numa` the only supported script language and remove the v1
-runner when it no longer helps development.
-
-Switch stages:
-
-Current status:
-
-1. `.numa` check/run is the public script path.
-2. UI and MCP script surfaces are Numadora-only.
-3. `.slasher` paths and `language=slasher` are rejected with
-   `slasher_language_removed`.
-4. Legacy `.slasher` samples have been removed from active scripts.
-
-## Acceptance Matrix
-
-| Capability | v1 reference | Numadora target | Required before v1 removal |
-|---|---|---|---|
-| Run artifacts | implemented | shared artifacts | yes |
-| Check diagnostics | implemented | Numadora diagnostics | yes |
-| Variables | dynamic scopes | `LET` / `VAR` | yes |
-| Includes/modules | `include` | `IMPORT` / modules | yes |
-| Window/input/screen/element/browser observe basics | implemented | `slasher_window`, `slasher_input`, `slasher_screen`, `slasher_element`, `slasher_browser` | yes |
-| Assertions | implemented | `slasher_test` | yes |
-| Browser mutation/data automation | implemented | `slasher_browser` | before browser test migration |
-| Element input automation | implemented | `slasher_element` | before native UI test migration |
-| Data packages | Phase 12 | `slasher_csv`, `slasher_json`, `slasher_excel` | package-specific |
-| Porting tooling | none | optional `slasher migrate` | no |
-| Build/exe | not active | later | no |
-
-## Risks And Mitigations
-
-| Risk | Mitigation |
+| リスク | 緩和策 |
 |---|---|
-| Two languages confuse users | Keep `language-system.md` as the entry point and keep public script execution Numadora-only. |
-| Numadora integration blocks RPA work | Design Phase 12 APIs as Numadora modules first; port or remove v1 commands later. |
-| Diagnostics regress from v1 | Treat source line, action, error code, evidence, and report parity as acceptance criteria. |
-| Runtime bridge is too slow or fragile | Start with a process bridge, measure, then decide whether embedding is worth it. |
-| Porting tool over-promises | Generate drafts and reports, not silently rewritten production scripts. |
-| Macro expansion hides failures | Require macro expansion events and source mapping before macro-heavy examples become canonical. |
+| AppOps PR-1 が大きすぎてレビュー困難 | 機械的な移動 + interface 分割が大半なので diff レビュー可能。`git mv` + sed で半自動化 |
+| `.numai` シグネチャと C# 実装の不整合 | 起動時 `module_interface_mismatch` チェックで fail-fast |
+| プラグイン間の隠れた依存 | NetArchTest の plugin 独立性ルールで CI 検出 |
+| run artifact スキーマ互換破壊 | 既存テスト + ゴールデン ファイル比較 |
+| ホスト例外の正規化漏れ | `numadora-language-spec.md` 9.6 のテーブルに対する unit test |
+| サンプル `.numa` のリリース時期と利用者影響 | PR-B+C 完了まで旧表記サンプルが残る。docs に注記 |
+| 単一 csproj 維持下での層境界違反 | NetArchTest が CI で検出 (`tests/Slasher.Tests/Architecture/`) |
 
-## Immediate Next Steps
+## Historical: N0〜N7 Phase Plan
 
-1. Parse richer source locations from Numadora diagnostics once the diagnostic
-   shape stabilizes.
-2. Replace sample stub modules with Slasher host bindings that keep the same
-   Numadora-facing function signatures.
-3. Draft the host-call protocol implementation for Slasher API calls from
-   Numadora.
-4. Update `slasher-script.md` and `slasher-numadora-integration.md` to use
-   current Numadora syntax when binding names change.
+旧 v0.1 計画では N0〜N7 のフェーズ表記を使っていた:
+
+- **N0**: ランタイム探索と契約凍結 (完了)
+- **N1**: Slasher モジュール表面公開 (部分完了)
+- **N2**: check エンドポイント接続 (完了)
+- **N3**: `.numa` run と artifact 出力 (部分完了)
+- **N4**: モジュール カバレッジ拡大 (進行中)
+- **N5**: マクロ ergonomic 検討 (**v0.2 で却下**)
+- **N6**: 履歴 `.slasher` 移植支援 (Q-L3 ハードカットで不要化)
+- **N7**: public script を Numadora-only にする (完了)
+
+v0.2 計画では N5 (マクロ) は採用しないことが確定し、N6 は不要化。
+他のフェーズは上記 v0.2 PR plan に統合・再構成される。
+
+過去の N0〜N7 詳細は `handoff-0.2.3.md` のスナップショットに残る。
+
+## Open Questions
+
+- 各プラグイン `.numai` の最終シグネチャ確定 (`slasher-numadora-integration.md` の能力テーブルと一致させる)
+- `slasher/clipboard`, `slasher/files`, `slasher/data` の plugin 化判断 (Io 層所有か AppOps プラグインか)
+- 既存サンプル `.numa` の v0.2 書き換え (Lang PR-B+C) の実施タイミング
+- AppOps PR-1 の git mv スクリプトの自動化レベル

@@ -1,0 +1,51 @@
+# Slasher assertions for AI-driven testing.
+# Slasher built-in (always available).
+# Failed assertions create a failed run artifact with assertion_failed code.
+
+MODULE slasher/test
+
+IMPORT slasher/window AS window
+
+--- 文字列マッチ モード。
+EXPORT TYPE MatchMode = "exact" | "contains" | "starts-with" | "ends-with"
+
+# --- フォアグラウンド系アサート ---
+
+--- 現在のフォアグラウンド ウィンドウ タイトルが期待値と一致することをアサート。
+--- 失敗時 assertion_failed (code) を投げる。
+EXPORT EFFECT(observe) FUNC assert-foreground-title(operator: MatchMode, expected: string): unit
+
+--- 現在のフォアグラウンド プロセス名が期待値と一致することをアサート。
+EXPORT EFFECT(observe) FUNC assert-foreground-process(operator: MatchMode, expected: string): unit
+
+# --- ウィンドウ系アサート ---
+
+--- 指定ウィンドウのタイトルが期待値と一致することをアサート。
+EXPORT EFFECT(observe) FUNC assert-window-title(target: window.WindowRef, operator: MatchMode, expected: string): unit
+
+--- 指定ウィンドウが特定状態にあることをアサート。
+EXPORT EFFECT(observe) FUNC assert-window-state(target: window.WindowRef, expected: window.WindowState): unit
+
+# --- 要素系アサート ---
+
+--- スコープ内に要素が存在することをアサート (失敗時 assertion_failed)。
+EXPORT EFFECT(observe) FUNC assert-element-exists(scope: string, title: string, match: MatchMode): unit
+
+--- 要素のテキストが期待値と一致することをアサート。
+EXPORT EFFECT(observe) FUNC assert-element-text(scope: string, title: string, operator: MatchMode, expected: string): unit
+
+# --- ソフト アサート (失敗を記録するが run は続行) ---
+
+--- ソフト版: assertion_failed として記録するが run を停止しない。
+EXPORT EFFECT(observe) FUNC soft-assert-foreground-title(operator: MatchMode, expected: string): unit
+
+--- ソフト アサートの累積失敗件数。run 終了時にゼロでなければ全体を failed とする。
+EXPORT FUNC soft-failure-count(): int
+
+# --- メモ ---
+
+--- 任意の説明テキストをテスト記録に追加 (note イベント)。
+EXPORT EFFECT(observe) FUNC note(message: string): unit
+
+--- 任意のファイル パスを証跡として添付。role は "screenshot" / "log" / "data" など。
+EXPORT EFFECT(observe) FUNC attach(path: string, role: string): unit

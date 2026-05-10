@@ -24,11 +24,6 @@ public sealed class NumadoraPolicyEvaluator
             return Deny("numadora_policy_sensitive_lineage", "Sensitive lineage is not allowed for this host call.");
         }
 
-        if (RequiresTargetIdentity(input.Capability) && input.Target is null)
-        {
-            return Deny("numadora_policy_missing_target", "Host call requires selected or foreground target identity.");
-        }
-
         if (input.Capability.Module.Equals("slasher_io", StringComparison.OrdinalIgnoreCase))
         {
             return Allow("numadora_policy_allowed_local_observe", "slasher_io host call is allowed in the local observation profile.");
@@ -46,6 +41,13 @@ public sealed class NumadoraPolicyEvaluator
             return Allow("numadora_policy_allowed_process_app_start", "slasher_app.Start is allowed with local process metadata auditing.");
         }
 
+        if (input.Capability.Module.Equals("slasher_app", StringComparison.OrdinalIgnoreCase)
+            && input.Capability.Function.Equals("Close", StringComparison.OrdinalIgnoreCase)
+            && input.Capability.CapabilityClass.Equals("Process/app", StringComparison.OrdinalIgnoreCase))
+        {
+            return Allow("numadora_policy_allowed_process_app_close", "slasher_app.Close is allowed with local process metadata auditing.");
+        }
+
         if (input.Capability.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
             && input.Capability.Function.Equals("Focus", StringComparison.OrdinalIgnoreCase)
             && input.Target is not null)
@@ -53,12 +55,31 @@ public sealed class NumadoraPolicyEvaluator
             return Allow("numadora_policy_allowed_window_focus", "slasher_window.Focus is allowed with explicit target identity.");
         }
 
+        if (input.Capability.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
+            && input.Capability.Function.Equals("State", StringComparison.OrdinalIgnoreCase)
+            && input.Target is not null)
+        {
+            return Allow("numadora_policy_allowed_window_state", "slasher_window.State is allowed with explicit target identity.");
+        }
+
+        if (input.Capability.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
+            && input.Capability.Function.Equals("Close", StringComparison.OrdinalIgnoreCase)
+            && input.Target is not null)
+        {
+            return Allow("numadora_policy_allowed_window_close", "slasher_window.Close is allowed with explicit target identity.");
+        }
+
         if (input.Capability.Module.Equals("slasher_input", StringComparison.OrdinalIgnoreCase)
             && IsApprovedInteractiveInputFunction(input.Capability.Function))
         {
-            return HasApproval(input, "interactiveInput")
-                ? Allow("numadora_policy_allowed_interactive_input", $"{input.Capability.Module}.{input.Capability.Function} is allowed by explicit interactive input approval.")
-                : Deny("numadora_policy_interactive_input_not_approved", "Interactive input requires explicit approval.");
+            if (!HasApproval(input, "interactiveInput"))
+            {
+                return Deny("numadora_policy_interactive_input_not_approved", "Interactive input requires explicit approval.");
+            }
+
+            return input.Target is null
+                ? Deny("numadora_policy_missing_target", "Host call requires selected or foreground target identity.")
+                : Allow("numadora_policy_allowed_interactive_input", $"{input.Capability.Module}.{input.Capability.Function} is allowed by explicit interactive input approval.");
         }
 
         if (input.Capability.Module.Equals("slasher_dialog", StringComparison.OrdinalIgnoreCase)
@@ -67,6 +88,11 @@ public sealed class NumadoraPolicyEvaluator
             return HasApproval(input, "interactiveInput")
                 ? Allow("numadora_policy_allowed_interactive_input", $"{input.Capability.Module}.{input.Capability.Function} is allowed by explicit interactive input approval.")
                 : Deny("numadora_policy_interactive_input_not_approved", "Interactive dialog display requires explicit approval.");
+        }
+
+        if (RequiresTargetIdentity(input.Capability) && input.Target is null)
+        {
+            return Deny("numadora_policy_missing_target", "Host call requires selected or foreground target identity.");
         }
 
         return Deny("numadora_policy_profile_blocked", $"Profile '{input.Capability.Profile}' is not enabled for execution.");

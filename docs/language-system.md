@@ -1,52 +1,56 @@
 # Slasher Language System
 
-This document is the entry point for Slasher's language direction.
+Slasher の言語方針のエントリ ドキュメント。
 
-The application is **Slasher**. Slasher uses the **Numadora** language for its
-script surface.
+アプリケーションは **Slasher**。Slasher のスクリプト面は **Numadora v0.2** を使う。
 
-The product direction is not "keep Slasher v1 syntax alive." The direction is:
+製品方針:
 
-- Slasher remains the application name and user-facing automation product.
-- Slasher scripts should use Numadora as the unified general-purpose language.
-- Numadora should be able to control Windows broadly through typed libraries
-  and host capabilities.
-- Slasher exposes Windows automation, evidence, Web, MCP, HTTP, and artifact
-  features through Numadora-facing modules and host bindings.
-- The v1 `.slasher` runner is removed from the public script surface.
+- Slasher はアプリケーション名であり、ユーザ向け自動化プロダクト
+- Slasher スクリプトは Numadora を統一汎用言語として使う
+- Numadora は型付きライブラリとホスト能力で外部アプリケーション (OS native ウィンドウ、
+  ブラウザ、Excel/GIMP 等のアプリ) を制御できる
+- Slasher は AppOps プラグインを通じて自動化 / 証跡 / Web / MCP / HTTP / artifact
+  機能を Numadora ホスト モジュールとして公開する
+- v1 `.slasher` ランナーは公開スクリプト面から撤去済
 
-Earlier standalone Slasher Script compiler planning has been removed from the
-active docs so new work does not accidentally target a second language.
+旧スタンドアロン Slasher Script コンパイラの計画は active docs から撤去された。
+新しい言語作業は本ドキュメントと下記 v0.2 spec から始める。
 
 ## Canonical Documents
 
-Read these documents in this order:
+以下の順で読む:
 
 1. `slasher-script.md`
-   - Slasher's current Numadora script profile.
-   - Defines how Slasher scripts use Numadora today.
-   - Must not define a Slasher-specific language dialect.
+   - Slasher の Numadora v0.2 スクリプト プロファイル (利用者向け)
+   - Slasher 専用方言になってはならない
 
 2. `numadora-language-spec.md`
-   - Generic Numadora language specification.
-   - Owns core syntax, type system, modules, macros, errors, and standard
-     library rules that are not specific to Slasher.
+   - 汎用 Numadora 言語仕様 v0.2 (canonical reference)
+   - 構文、型システム、モジュール、エラー、標準ライブラリ、ホスト バインディング規則
 
 3. `slasher-numadora-integration.md`
-   - Boundary between Numadora and the C# Slasher application/server.
-   - Owns host binding strategy, JSON-RPC/HTTP integration, Windows automation
-     module signatures, event logs, diagnostics, and implementation phases.
+   - C# Slasher アプリケーション/サーバと Numadora の統合契約
+   - ホスト バインディング戦略、HTTP/MCP 統合、Windows 自動化モジュール、イベント、診断
 
-4. `numadora-migration-plan.md`
-   - Implementation plan for adding `.numa` support to Slasher.
-   - Owns phases, acceptance criteria, migration tooling, and deprecation gates.
+4. `slasher-plugin-architecture.md`
+   - AppOps プラグイン アーキテクチャ
+   - WindowsNative / Browser / 将来の Excel・GIMP 等のプラグイン契約
 
-5. `migration-from-slasher-v1.md`
-   - Historical migration guide for old `.slasher` files.
-   - Keep only as reference material for manual porting.
+5. `numadora-migration-plan.md`
+   - `.numa` v0.2 サポート追加の実装フェーズ計画
+   - PR 分割、移行ツール、互換性ゲート
 
-If an old note or issue mentions the standalone Slasher Script compiler, treat
-that as superseded by this document and the Numadora specs below.
+6. `migration-from-slasher-v1.md`
+   - 旧 `.slasher` ファイルから v0.2 への手動移行ガイド (履歴の参照)
+
+## v0.2 設計の背景
+
+v0.1 → v0.2 の改訂理由と詳細は以下:
+
+- `numadora-language-redesign.md` - 再構成方針 (アンカー、ホスト モデル、マクロなし、トレーリング ブロック)
+- `numadora-base-structure.md` - 字句 + 意味の詳細
+- `numadora-core-systems.md` - 型 / モジュール / 実行モデルの詳細
 
 ## Design Decisions
 
@@ -54,84 +58,82 @@ that as superseded by this document and the Numadora specs below.
 
 | Extension | Meaning |
 |---|---|
-| `.numa` | Active Numadora scripts. |
-| `.numai` | Future/reference Numadora interface files only; not part of the active N0 path. |
+| `.numa` | アクティブな Numadora スクリプト |
+| `.numai` | ホスト バインディング インターフェイス宣言 (本体なし、シグネチャのみ) |
 
-`.slasher` files are no longer accepted by Slasher script check/run APIs.
+`.slasher` ファイルは Slasher script check/run API で受け付けない (Q-L3 ハードカット)。
 
 ### Language Ownership
 
-- Numadora owns the general-purpose language, module system, type system,
-  runtime model, and syntax.
-- Windows automation should be modeled as Numadora libraries and host
-  capabilities, not as inherited Slasher v1 commands.
-- Slasher owns the application behavior, Windows automation implementation,
-  evidence model, API surfaces, and user-facing product experience.
-- Slasher must not fork Numadora syntax for local convenience.
-- Slasher-specific command forms are not part of the core direction.
+- Numadora が言語コア (構文、型、モジュール、ランタイム モデル) を所有
+- 外部アプリケーション制御は Numadora ライブラリとホスト能力 (`.numai` + プラグイン)
+  としてモデル化
+- Slasher はアプリケーション挙動、自動化実装、証跡モデル、API 表面、ユーザ体験を所有
+- Slasher は Numadora 構文を Slasher の都合で fork してはならない
+- Slasher 固有のコマンド形式は言語コアに含めない
 
 ### Script Style
 
-`.numa` scripts should use ordinary Numadora imports and function calls. The
-preferred spelling follows the current Numadora implementation:
-
-- `IMPORT slasher_app AS app`
-- `app.Start("notepad.exe")`
-- `input.Text("hello")`
-
-Do not introduce Slasher-only source rewriting to preserve older command-like
-syntax. Keeping the module alias and normal function call visible makes
-generated scripts easier to audit and reduces command-name collisions as the
-Windows-control library grows.
-
-Example:
+`.numa` スクリプトは v0.2 構文を使う:
 
 ```numadora
-IMPORT slasher_app AS app
-IMPORT slasher_window AS win
-IMPORT slasher_input AS input
+MODULE notepad-smoke
 
-FUNC main()
-    LET handle := app.Start("notepad.exe")
-    LET title := win.WaitForTitle("Notepad", 10000)
-    win.Focus(handle)
-    input.Text("hello from Slasher")
+IMPORT slasher/app AS app
+IMPORT slasher/input AS input
+IMPORT slasher/io AS io
+
+EXPORT FUNC main()
+  io.step("open notepad")
+  LET ref = app.start-app("notepad.exe")
+  LET win = ref.wait-for-window("Notepad", 10000) OR FAIL "no notepad"
+  win.focus()
+  input.text("hello from Slasher")
+  ref.close()
 END
 ```
 
-The goal is not to reproduce v1 commands. The goal is to express Windows
-automation in real Numadora syntax while gaining typed modules, structured
-errors, imports, and normal Numadora tooling.
+要点:
+
+- スラッシュ区切りモジュール パス (`slasher/app`)
+- alias 必須 IMPORT
+- lowercase 型 (`int`, `string`, `array[T]`)
+- `LET name = expr` (`:=` ではない)
+- kebab-case 関数名
+- UFCS メソッド呼び出し糖衣 (`win.focus()` ≡ `focus(win)`)
+- `OR FAIL` で `Option[T]` の unwrap
+- `OPAQUE TYPE` リソース参照 (`AppRef`, `WindowRef`)
+
+詳細は `slasher-script.md` および `numadora-language-spec.md` を参照。
 
 ### Compatibility Policy
 
-- New language work should target Numadora `.numa`.
-- Existing `.slasher` scripts are no longer supported by Slasher script
-  check/run APIs.
-- Compatibility sugar should not steer the language design.
-- Shared behavior should move into Numadora modules and host APIs.
+- 新しい言語作業は Numadora `.numa` v0.2 を対象とする
+- 既存 `.slasher` スクリプトは Slasher script check/run API で **サポート対象外**
+- 互換シュガーは言語設計の判断基準にしない
+- 共有挙動は Numadora モジュールとホスト API に集約
 
 ## Implementation Track
 
-The detailed implementation plan is `numadora-migration-plan.md`. At a high
-level, the track is:
+詳細実装計画は `numadora-migration-plan.md`。
 
-1. Align scripts and examples with the current Numadora syntax.
-2. Define Windows automation module contracts in that syntax.
-3. Add `.numa` check/run support.
-4. Replace sample stub modules with host bindings backed by Slasher.
-5. Add ergonomics only when they fit Numadora as a whole.
-6. Port any still-useful historical examples to `.numa`.
-7. Keep public script execution Numadora-only.
+高レベル サマリ:
 
-Phase 12 RPA package work can continue, but new package shapes should be chosen
-so they can become Numadora modules without semantic churn. Implementation
-examples should use the module names accepted by the current runtime, such as
-`slasher_csv`.
+1. v0.2 spec 反映 (完了): `numadora-language-spec.md` v0.2
+2. Slasher を 5 層構成に再編 (`slasher-layer-architecture.md` PR-1〜)
+3. AppOps プラグイン契約導入と既存 Windows コードのプラグイン化 (`slasher-plugin-architecture.md` 9 章)
+4. `.numai` ホスト バインディング機構の C# 側実装 (Lang PR-D)
+5. 既存ホスト関数を `.numai` + プラグイン C# クラスに移行 (Lang PR-E)
+6. `Option[T]` / `MATCH` / `OR FAIL` / `RuntimeError` 実装 (Lang PR-F)
+7. リソース参照を `OPAQUE TYPE` に切替 (Lang PR-G)
+8. トレーリング ブロック構文 + UFCS 実装 (Lang PR-H)
+9. サンプル `.numa` の v0.2 書き換え (Lang PR-B+C)
+
+Phase 12 RPA パッケージ作業は継続。新パッケージは Numadora モジュールとして公開できる
+形 (`slasher/csv`, `slasher/excel` 等のプラグインまたはホスト モジュール) を選ぶ。
 
 ## Open Questions
 
-- Which Windows-control modules must be available before `.numa` is useful for
-  real AI-driven tests.
-- Whether host bindings should stay as source-level stub modules during early
-  development or move immediately to runtime-provided functions.
+- 各プラグイン `.numai` の最終シグネチャ確定 (本ノートのスタイル例と整合させる)
+- `slasher/clipboard`, `slasher/files`, `slasher/data` の plugin 化判断 (Io 層所有か AppOps プラグインか)
+- v0.2 サンプル `.numa` のリリース時期と、それまでの旧サンプルの扱い

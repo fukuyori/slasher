@@ -415,14 +415,15 @@ scripts/numadora-samples/notepad-check.numa
 Numadora sample:
 
 ```numadora
-IMPORT slasher_app AS app
-IMPORT slasher_window AS win
+IMPORT slasher_desktop AS desktop
 IMPORT slasher_input AS input
 
 FUNC main()
-    LET handle := app.Start("notepad.exe")
-    win.Focus(handle)
+    LET appRef := desktop.StartApp("notepad.exe")
+    LET windowRef := appRef.WaitForWindow("Notepad", 10000)
+    windowRef.Focus()
     input.Text("hello from Slasher")
+    appRef.Close()
 END
 ```
 

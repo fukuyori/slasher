@@ -1,7 +1,15 @@
 MODULE slasher_screen
-    EXPORT Capture
+    EXPORT Capture, CaptureWindow, CaptureMonitor
 
     FUNC Capture(scope: String, maxWidth: Int, maxHeight: Int)
         Print("__SLASHER_HOST_CALL__ slasher_screen.Capture " + scope + " " + ToString(maxWidth) + " " + ToString(maxHeight))
+    END
+
+    FUNC CaptureWindow(target: String, maxWidth: Int, maxHeight: Int)
+        Print("__SLASHER_HOST_CALL__ slasher_screen.CaptureWindow " + target + " " + ToString(maxWidth) + " " + ToString(maxHeight))
+    END
+
+    FUNC CaptureMonitor(screenIndex: Int, maxWidth: Int, maxHeight: Int)
+        Print("__SLASHER_HOST_CALL__ slasher_screen.CaptureMonitor " + ToString(screenIndex) + " " + ToString(maxWidth) + " " + ToString(maxHeight))
     END
 END

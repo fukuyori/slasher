@@ -1,5 +1,12 @@
-IMPORT slasher_dialog AS dialog
+# Slasher v0.2 minimal sample: display a local message box.
+#
+# Requires Numadora v0.2 parser. Run prerequisite: allowInteractiveInput = true.
 
-FUNC main()
-    dialog.Message("Numadoraからのメッセージです。", "Slasher")
+MODULE message-box
+REQUIRES (user-input)
+
+IMPORT slasher/dialog AS dialog
+
+EXPORT FUNC main()
+  dialog.message("Slasher", "Numadora からのメッセージです。", "info")
 END

@@ -1,0 +1,83 @@
+# Slasher window operations.
+# Provided by WindowsNative plugin (Windows). Future: MacOSNative, LinuxNative.
+
+MODULE slasher/window
+
+--- トップレベル ウィンドウへの不透明参照。
+EXPORT OPAQUE TYPE WindowRef
+
+--- ウィンドウ状態の列挙。
+EXPORT TYPE WindowState = "normal" | "minimized" | "maximized" | "hidden"
+
+--- ウィンドウ位置・サイズ。
+EXPORT RECORD WindowRect {
+  x: int,
+  y: int,
+  width: int,
+  height: int,
+}
+
+--- ウィンドウの観測情報 (info() で取得)。
+EXPORT RECORD WindowInfo {
+  --- ウィンドウ タイトル (空文字列もあり得る)。
+  title: string,
+  --- Win32 HWND 相当。
+  handle: int,
+  --- ウィンドウ クラス名。
+  class-name: string,
+  --- 所属プロセス ID。
+  process-id: int,
+  --- 表示状態。
+  state: WindowState,
+  --- 画面座標での矩形。
+  rect: WindowRect,
+  --- フォアグラウンドかどうか。
+  is-foreground: bool,
+}
+
+--- 現在フォアグラウンドにあるウィンドウを返す。
+EXPORT EFFECT(observe) FUNC foreground(): Option[WindowRef]
+
+--- タイトル一致するウィンドウを 1 件検索する。complete match。
+EXPORT EFFECT(observe) FUNC find(title: string): Option[WindowRef]
+
+--- タイトル / プロセス ID で複数ウィンドウを列挙する。
+--- title が空文字なら全件。process-id が 0 以下なら全プロセス。
+EXPORT EFFECT(observe) FUNC enumerate(title: string, process-id: int): array[WindowRef]
+
+--- ウィンドウがタイトルに一致するまで待機する。
+EXPORT EFFECT(observe) FUNC wait-for-title(title: string, timeout-ms: int): Option[WindowRef]
+
+--- ウィンドウの観測情報を返す。
+EXPORT EFFECT(observe) FUNC info(target: WindowRef): WindowInfo
+
+--- ウィンドウを前面に持ってくる。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC focus(target: WindowRef): unit
+
+--- ウィンドウ状態を変更する。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC set-state(target: WindowRef, state: WindowState): unit
+
+--- 最大化 (set-state(target, "maximized") の糖衣)。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC maximize(target: WindowRef): unit
+
+--- 最小化。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC minimize(target: WindowRef): unit
+
+--- 通常状態に戻す。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC restore(target: WindowRef): unit
+
+--- 表示する (set-state(target, "normal"))。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC show(target: WindowRef): unit
+
+--- 非表示にする (set-state(target, "hidden"))。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC hide(target: WindowRef): unit
+
+--- ウィンドウを移動・リサイズする。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC move(target: WindowRef, x: int, y: int, width: int, height: int): unit
+
+--- ウィンドウを画像キャプチャする (BMP base64 文字列を返す)。
+--- max-width / max-height は 0 でフルサイズ。
+EXPORT EFFECT(observe) FUNC capture(target: WindowRef, max-width: int, max-height: int): string
+
+--- ウィンドウを閉じる (WM_CLOSE 送信)。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC close(target: WindowRef): unit

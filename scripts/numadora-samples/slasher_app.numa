@@ -1,8 +1,12 @@
 MODULE slasher_app
-    EXPORT Start
+    EXPORT Start, Close
 
-    FUNC Start(fileName: String) -> Int
+    FUNC Start(fileName: String) -> String
         Print("__SLASHER_HOST_CALL__ slasher_app.Start " + fileName)
-        RETURN 1
+        RETURN "app:last"
+    END
+
+    FUNC Close(appRef: String)
+        Print("__SLASHER_HOST_CALL__ slasher_app.Close " + appRef)
     END
 END

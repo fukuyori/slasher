@@ -1,0 +1,51 @@
+# Slasher v0.2 sample: CSV reading with std/array transformations.
+#
+# Demonstrates:
+# - slasher/data CSV read returning structured CsvDocument
+# - record field access on RECORD types
+# - std/array.map / .filter / .length for data transformation
+# - trailing block (DO |x| ... END) for inline lambdas
+# - raw string for Windows path
+# - structured logging via slasher/io
+
+MODULE csv-process
+REQUIRES (file-read, observe)
+
+IMPORT std/array AS array
+IMPORT std/string AS string
+IMPORT slasher/data AS data
+IMPORT slasher/io AS io
+
+# Pure helper: extract a column value from a CSV row by name.
+FUNC field-of(row: data.CsvRow, name: string): string
+  LET found = array.find(row.fields) DO |pair|
+    RETURN pair.name == name
+  END
+  MATCH found OF
+  CASE Some(pair) THEN RETURN pair.value
+  CASE None       THEN RETURN ""
+  END
+END
+
+EXPORT FUNC main()
+  io.step("read CSV")
+  LET doc = data.csv-read(r"data\input.csv", true, ",")
+
+  io.log("loaded " + string.from-int(array.length(doc.rows)) + " rows")
+
+  io.step("filter active rows")
+  LET active = array.filter(doc.rows) DO |row|
+    RETURN field-of(row, "status") == "active"
+  END
+
+  io.log("active rows: " + string.from-int(array.length(active)))
+
+  io.step("extract names")
+  LET names = array.map(active) DO |row|
+    RETURN field-of(row, "name")
+  END
+
+  FOR n IN names DO
+    io.log("- " + n)
+  END
+END

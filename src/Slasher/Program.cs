@@ -1,5 +1,8 @@
 using Slasher.Api;
+using Slasher.AppOps.Plugins.Browser;
+using Slasher.AppOps.Plugins.WindowsNative;
 using Slasher.Automation;
+using Slasher.Core.AppOps;
 using Slasher.Data;
 using Slasher.Files;
 using Slasher.Peers;
@@ -44,6 +47,26 @@ builder.Services.AddSingleton<PeerRegistry>();
 builder.Services.AddSingleton<PeerEndpointService>();
 builder.Services.AddSingleton<NamespaceService>();
 builder.Services.AddSingleton<ResourceReadService>();
+
+// AppOps プラグイン登録 (PR-1 Stage 1: shell plugins; PR-E で実装移行予定)。
+// CheckAvailability で OS / 設定をチェック → Available なものだけ Register される。
+var pluginRegistry = new PluginRegistry();
+builder.Services.AddSingleton(pluginRegistry);
+using (var bootstrapLoggerFactory = LoggerFactory.Create(lb =>
+    lb.AddConfiguration(builder.Configuration.GetSection("Logging")).AddConsole()))
+{
+    var pluginCandidates = new IAppOpsPlugin[]
+    {
+        new WindowsNativePlugin(),
+        new BrowserPlugin(),
+    };
+    pluginRegistry.DiscoverAndRegister(
+        candidates: pluginCandidates,
+        services: builder.Services,
+        configuration: builder.Configuration,
+        loggerFactory: bootstrapLoggerFactory,
+        endpointRouteBuilder: null);
+}
 
 var app = builder.Build();
 

@@ -146,6 +146,8 @@ public sealed record MessageBoxRequest(string Text, string? Title = null);
 
 public sealed record ScreenshotRequest(
     string? Handle = null,
+    int? ScreenIndex = null,
+    Rect? Bounds = null,
     bool IncludeCursor = false,
     int? MaxWidth = null,
     int? MaxHeight = null);
@@ -249,6 +251,13 @@ public sealed record WindowInfo(
     bool IsMinimized);
 
 public sealed record ScreenshotResponse(string MimeType, string Base64Image, int Width, int Height);
+
+public sealed record ScreenInfo(
+    int Index,
+    string DeviceName,
+    Rect Bounds,
+    Rect WorkArea,
+    bool IsPrimary);
 
 public sealed record ImageMatchResponse(
     bool Found,

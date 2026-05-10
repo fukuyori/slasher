@@ -74,50 +74,69 @@ or leak private information if misused.
 
 ## Capability Classes
 
-Slasher should classify actions before adding more power.
+Slasher classifies actions into 15 capability classes. **これらは Numadora v0.2.1 の
+言語キーワード** として `EXPORT EFFECT(class) FUNC` および `REQUIRES (class, ...)` の
+括弧内で参照される (`numadora-language-spec.md` 1.4.1)。
 
-| Class | Examples | Default |
+| Class (Numadora 識別子) | Examples | Default |
 |---|---|---|
-| Observe | list windows, capture, element tree, file info | allowed |
-| User-input | keys, text, mouse, focus | allowed locally, logged carefully |
-| File-read | read/open/list files | allow with path policy |
-| File-write | write/copy/rename/zip/unzip | require target evidence |
-| Destructive | delete, overwrite, recursive delete, close all | require explicit dangerous flag or approval policy |
-| Browser-data | cookies, storage, downloads/uploads | redact values where needed |
-| Clipboard | get, assign, paste | redact or mark sensitive values |
-| Process/app | start, close, kill, select | log executable/process/window metadata |
-| Network/remote | non-local bind, remote clients, HTTP calls | opt-in with authentication |
-| Peer delegation | Slasher-to-Slasher delegated runs | registered peer, trust profile, and capability policy |
-| Scheduling | unattended recurring runs | opt-in with stored policy |
-| Secrets | credentials, tokens, secure variables | never log raw values by default |
+| `observe` | list windows, capture, element tree, file info, ログ記録 | allowed |
+| `user-input` | keys, text, mouse, focus, ウィンドウ操作, ダイアログ | allowed locally, logged carefully |
+| `file-read` | read/open/list files | allow with path policy |
+| `file-write` | write/copy/rename/zip/unzip | require target evidence |
+| `destructive` | delete, overwrite, recursive delete, close all | require explicit dangerous flag or approval policy |
+| `browser-data` | cookies, storage, downloads/uploads | redact values where needed |
+| `clipboard` | get, assign, paste | redact or mark sensitive values |
+| `process-app` | start, close, kill, select | log executable/process/window metadata |
+| `network-out` | アウトバウンド HTTP / ピア通信 | opt-in with authentication |
+| `network-in` | 着信受付 (peer namespace export 等) | opt-in with authentication |
+| `peer-delegate` | Slasher-to-Slasher delegated runs | registered peer, trust profile, and capability policy |
+| `scheduling` | unattended recurring runs | opt-in with stored policy |
+| `unattended` | 無人実行 (UI なしの run) | opt-in with stored policy |
+| `secrets` | credentials, tokens, secure variables | never log raw values by default |
+| `system-info` | 時刻、CWD、軽い env、wait | allowed (基本) |
+
+`network-out` と `network-in` は能力としては独立 (送信/受信の方向が違う)。
+ピア委譲は `network-out` (送信) + `peer-delegate` (委譲意図) を併記。
 
 ## Script Policy
 
-Future Numadora integration should treat security as part of the runtime
-contract:
+Numadora v0.2.1 統合では、能力宣言が **言語の一級概念**:
 
-- scripts declare or are assigned a capability profile
-- check mode can report required capabilities before run mode
-- run mode refuses missing capabilities instead of silently prompting from deep
-  inside an action
-- script reports include the capability profile used for the run
-- imported modules should not grant hidden extra powers
-- host calls should be evaluated with lineage-aware policy input as described
-  in `numadora-lineage-policy-plan.md`
+- 各ホスト関数は `EXPORT EFFECT(class) FUNC` (および `INTERACTIVE` 修飾) で必要能力を宣言
+- 各スクリプト (main 持ちモジュール) は `REQUIRES (class, ...)` で使用能力を **静的宣言**
+- check 段階: スクリプトの REQUIRES と実際に呼ばれているホスト関数の能力集合を突合 (推移検証)
+- 不足は `requires_missing_capability`、過多は `requires_unused_capability` (warning)
+- run 段階: スクリプトの REQUIRES と現行プロファイルを突合、不適合は `policy_denied` で拒否
+- ホスト呼び出しはさらに lineage-aware ポリシー入力で評価 (`numadora-lineage-policy-plan.md`)
 
-Initial profiles:
+### 能力プロファイル
 
-| Profile | Purpose |
+各プロファイルは **能力クラスの集合** として定義される:
+
+| Profile | 含まれる能力クラス |
 |---|---|
-| `observe` | read-only inspection and screenshots |
-| `interactive` | normal local input/window automation |
-| `files` | file read/write without destructive recursion |
-| `destructive` | delete, overwrite, close-all, recursive operations |
-| `browser-data` | cookies, storage, downloads, uploads |
-| `unattended` | scheduled or background execution |
-| `secrets` | access to protected secret values |
+| `observe` | `observe`, `system-info` |
+| `interactive` | `observe`, `system-info`, `user-input`, `process-app`, `clipboard` |
+| `files` | `interactive` の全て + `file-read`, `file-write` (`destructive` 除く) |
+| `browser-data` | `interactive` の全て + `browser-data` |
+| `network` | `interactive` の全て + `network-out` |
+| `peer-delegate` | `network` の全て + `peer-delegate` |
+| `destructive` | `files` の全て + `destructive` |
+| `secrets` | (基底プロファイル + `secrets` を opt-in 追加) |
+| `unattended` | (基底プロファイル + `unattended` + `scheduling`) |
 
-Profiles can be combined, but the combination should appear in run metadata.
+プロファイルは集合演算で組み合わせ可能 (run metadata に組み合わせ結果を記録)。
+
+### スクリプト側の REQUIRES 例
+
+```numadora
+MODULE notepad-check
+REQUIRES (process-app, user-input, observe)
+```
+
+このスクリプトは少なくとも `interactive` プロファイル相当が許可されたコンテキストで run 可能。
+`observe` プロファイルでは `process-app` と `user-input` を含まないため `policy_denied`。
 
 ## Approval Model
 
@@ -195,11 +214,14 @@ Initial peer rules:
   desktop mount
 - namespace `list`, resource `read`, and resource `invoke` all require policy
   evaluation
-- registered peers receive a trust profile such as `known`, `observed`, or
-  `interactive`
+- registered peers receive a trust profile (`TrustProfile`): `known`, `observed`,
+  or `interactive` (`numadora-language-spec.md` 9.6.1 の `slasher/peer.numai` で
+  string-literal union として公開)
 - `observed` peers may request observe-only runs but not input, file-write,
   clipboard, browser-data, destructive, secret, or unattended actions
 - relay is denied by default
+- **再帰委譲は禁止** (`policy_recursive_delegation`): 委譲経由で起動された run は
+  さらに `delegate-run` を呼べない。run コンテキストの `delegation-depth >= 1` で拒否
 - the executor peer records requester identity, coordinator peer, executor peer,
   trust profile, requested capabilities, granted capabilities, and refusal
   reasons in run artifacts
@@ -208,7 +230,24 @@ Initial peer rules:
 - remote artifact access must be authorized and redacted with at least the same
   strictness as MCP responses
 
-See `peer-network-model.md` for the protocol and portable-core design.
+### Numadora 側からの利用
+
+委譲スクリプトは `slasher/peer` モジュール経由で書く:
+
+```numadora
+MODULE remote-deploy
+REQUIRES (network-out, peer-delegate, observe)
+
+IMPORT slasher/peer AS peer
+
+EXPORT FUNC main()
+  LET workstation = peer.find-peer("workstation") OR FAIL "not registered"
+  LET run-id = workstation.delegate-run(script-source, "interactive", "remote-deploy")
+END
+```
+
+詳細は `peer-network-model.md` (プロトコル・ポータブル コア) と
+`numadora-security-network-design.md` (言語側統合)。
 
 ## Development Gates
 

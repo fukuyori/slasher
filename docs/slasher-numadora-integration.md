@@ -1,203 +1,278 @@
 # Slasher Numadora Integration
 
-This document defines how the Slasher application uses Numadora.
+Slasher が Numadora v0.2 をどうホスト・利用するかを定義する実装契約。
 
-The rule for this repository is simple: **the application is Slasher; the
-language is Numadora**. Adapt Slasher's script implementation to the Numadora
-implementation that exists now. Do not create a Slasher-only source adapter that
-accepts old v1 syntax, slash-separated module paths, or `.numai` files before
-Numadora supports them as normal language features.
+ガイディング ルール: **アプリは Slasher、言語は Numadora**。Slasher は AppOps
+プラグイン (`slasher-plugin-architecture.md`) を通じてホスト機能を提供するが、
+Numadora 言語の表面に Slasher 固有の構文を持ち込まない。
 
-For the language-facing script profile, see `slasher-script.md`. For the
-runtime invocation boundary, see `numadora-runtime-contract.md`. For the
-implementation phase plan, see `numadora-migration-plan.md`.
+関連:
+
+- `numadora-language-spec.md` — 言語仕様 v0.2
+- `slasher-script.md` — Slasher スクリプト プロファイル (利用者向け)
+- `slasher-plugin-architecture.md` — AppOps プラグインの設計
+- `slasher-layer-architecture.md` — Slasher 全体の 5 層構成
+- `numadora-migration-plan.md` — フェーズ計画
+- `numadora-runtime-contract.md` — runtime 境界 (改訂対象)
 
 ## Active Shape
 
-Current `.numa` files use normal Numadora modules and alias-qualified calls:
+v0.2 スクリプトの典型例:
 
 ```numadora
-IMPORT slasher_app AS app
-IMPORT slasher_window AS win
-IMPORT slasher_input AS input
-IMPORT slasher_io AS io
-IMPORT slasher_test AS test
+MODULE notepad-smoke
 
-FUNC main()
-    io.Step("open notepad")
-    LET handle := app.Start("notepad.exe")
+IMPORT slasher/app AS app
+IMPORT slasher/input AS input
+IMPORT slasher/io AS io
+IMPORT slasher/test AS test
 
-    LET title := win.WaitForTitle("Notepad", 10000)
-    win.Focus(handle)
+EXPORT FUNC main()
+  io.step("open notepad")
+  LET ref = app.start-app("notepad.exe")
 
-    io.Step("type text")
-    input.Text("Slasher Numadora smoke")
-    test.AssertForegroundTitle("contains", title)
+  LET win = ref.wait-for-window("Notepad", 10000) OR FAIL "notepad timeout"
+  win.focus()
+
+  io.step("type text")
+  input.text("Slasher Numadora smoke")
+  test.assert-foreground-title("contains", "Notepad")
 END
 ```
 
-The N0 fixture lives at `scripts/numadora-samples/notepad-check.numa` and is
-validated by `scripts/verify-numadora-n0.ps1`.
+スモーク サンプルは `scripts/numadora-samples/notepad-check.numa` にあり、
+`scripts/verify-numadora-n0.ps1` で検証する。
 
 ## Initial Modules
 
-The first integration slice uses these module names because they are accepted
-by the current Numadora prototype:
+AppOps プラグインが提供するモジュール (`slasher-plugin-architecture.md` 1.3 参照):
 
-| Module | Purpose | Initial calls |
+| Module | Purpose | Plugin |
 |---|---|---|
-| `slasher_app` | application process control | `Start(fileName)` |
-| `slasher_window` | window lookup and focus | `WaitForTitle(title, timeoutMs)`, `Focus(handle)` |
-| `slasher_input` | keyboard and mouse input | `Text(content)`, `Keys(keys)`, `Mouse(action, x, y, button)`, `Wheel(x, y, delta)`, `Drag(fromX, fromY, toX, toY, button, durationMs, steps)`, `ContextMenu(x, y, delayMs)` |
-| `slasher_screen` | screenshots and visual observations | `Capture(scope, maxWidth, maxHeight)` |
-| `slasher_element` | native element observation | `Find(scope, title, className, controlId, match, maxDepth, maxResults)`, `Exists(...)`, `ReadText(...)`, `Tree(scope, maxDepth, maxChildren)` |
-| `slasher_browser` | browser observation | `Current(sessionId)`, `Title(sessionId)`, `Url(sessionId)`, `Locate(using, value, timeoutMs, sessionId)`, `DomText(...)`, `Attribute(...)`, `Screenshot(sessionId)`, `Links(sessionId)`, `Windows(sessionId)` |
-| `slasher_io` | run log and step markers | `Step(name)`, `Log(message)`, `Wait(ms)` |
-| `slasher_test` | assertions | `AssertForegroundTitle(operator, expected)` |
+| `slasher/app` | app/process operations | WindowsNative (将来 MacOSNative, LinuxNative) |
+| `slasher/window` | window operations | (同上) |
+| `slasher/input` | keyboard / mouse | (同上) |
+| `slasher/screen` | screenshots | (同上) |
+| `slasher/element` | UI element observation | (同上) |
+| `slasher/dialog` | local dialog | (同上) |
+| `slasher/browser` | browser (Selenium) | Browser (cross-platform) |
+| `slasher/clipboard` | clipboard | Io 層が公開 (TBD) |
+| `slasher/files` | files | Io 層が公開 |
+| `slasher/data` | CSV/JSON/Excel | Io 層が公開 |
+| `slasher/io` | step/log/wait | Slasher built-in |
+| `slasher/test` | assertions | Slasher built-in |
 
-These names are a current-runtime module shape, not a permanent branding
-decision. If Numadora later gains package-style module paths, Windows-control
-libraries can move toward a broader namespace in a separate language-level
-change.
+`GET /plugins` は各プラグインの状態 (`available` / `not_applicable` /
+`missing_prerequisites` / `disabled`) と提供モジュール一覧を返す。
+Available でないプラグインのモジュールは `IMPORT` 解決で `module_not_found`
+として失敗し、`details.reason = "plugin_not_available"` と `details.plugin = ...`
+を含む。
 
 ## Initial Capability Metadata
 
-Slasher now keeps an initial host binding catalog for check-time reporting. The
-catalog maps known Numadora-facing calls to the security classes in
-`security-policy.md`:
+各ホスト関数の能力分類とポリシー プロファイルは、プラグインの `.numai` 修飾子で
+表現される:
 
-| Module | Function | Capability class | Profile |
-|---|---|---|---|
-| `slasher_app` | `Start` | Process/app | `interactive` |
-| `slasher_window` | `WaitForTitle` | Observe | `observe` |
-| `slasher_window` | `Focus` | User-input | `interactive` |
-| `slasher_input` | `Text` | User-input | `interactive` |
-| `slasher_input` | `Keys` | User-input | `interactive` |
-| `slasher_input` | `Mouse` | User-input | `interactive` |
-| `slasher_input` | `Wheel` | User-input | `interactive` |
-| `slasher_input` | `Drag` | User-input | `interactive` |
-| `slasher_input` | `ContextMenu` | User-input | `interactive` |
-| `slasher_screen` | `Capture` | Observe | `observe` |
-| `slasher_element` | `Find` | Observe | `observe` |
-| `slasher_element` | `Exists` | Observe | `observe` |
-| `slasher_element` | `ReadText` | Observe | `observe` |
-| `slasher_element` | `Tree` | Observe | `observe` |
-| `slasher_browser` | `Current` | Observe | `observe` |
-| `slasher_browser` | `Title` | Observe | `observe` |
-| `slasher_browser` | `Url` | Observe | `observe` |
-| `slasher_browser` | `Locate` | Observe | `observe` |
-| `slasher_browser` | `DomText` | Observe | `observe` |
-| `slasher_browser` | `Attribute` | Observe | `observe` |
-| `slasher_browser` | `Screenshot` | Observe | `observe` |
-| `slasher_browser` | `Links` | Observe | `observe` |
-| `slasher_browser` | `Windows` | Observe | `observe` |
-| `slasher_io` | `Step` | Observe | `observe` |
-| `slasher_io` | `Log` | Observe | `observe` |
-| `slasher_io` | `Wait` | Observe | `observe` |
-| `slasher_test` | `AssertForegroundTitle` | Observe | `observe` |
+- `EXPORT EFFECT(class) FUNC` = 副作用あり (能力クラス必須、純粋でない)
+- `EXPORT INTERACTIVE EFFECT(class) FUNC` = ユーザ承認必須 (`allowInteractiveInput`)
 
-`/scripts/check` reports these as `requiredCapabilities` for `.numa` scripts
-when it can statically recognize `IMPORT module AS alias` plus
-`alias.Function(...)` calls. Run mode records the same capabilities in
-`numadora.hostCall` events. Interactive actions require explicit
-`allowInteractiveInput` approval; the web UI presents this as `Interactive`.
-Input actions also require target identity. Without approval, `slasher_input.Text`,
-`slasher_input.Keys`, `slasher_input.Mouse`, `slasher_input.Wheel`, and
-`slasher_input.Drag`, and `slasher_input.ContextMenu` fail closed without
-sending input. Approved input revalidates the foreground target immediately
-before sending. Dialog actions such as `slasher_dialog.Message` fail closed
-without the same approval before displaying a local message box.
+能力クラス名は `numadora-language-spec.md` 1.4.1 の 13 種から選ぶ。プロファイルは
+`security-policy.md` の能力プロファイル節に対応。
+
+| Module | Function | EFFECT(class) | INTERACTIVE | 最小プロファイル |
+|---|---|---|---|---|
+| `slasher/app` | `start-app` | `process-app` | ✓ | interactive |
+| `slasher/app` | `start-app-with-args` | `process-app` | ✓ | interactive |
+| `slasher/app` | `enumerate-windows` | `observe` |   | observe |
+| `slasher/app` | `wait-for-window` | `observe` |   | observe |
+| `slasher/app` | `info` | `observe` |   | observe |
+| `slasher/app` | `close` | `process-app` | ✓ | interactive |
+| `slasher/window` | `foreground` | `observe` |   | observe |
+| `slasher/window` | `find` | `observe` |   | observe |
+| `slasher/window` | `enumerate` | `observe` |   | observe |
+| `slasher/window` | `wait-for-title` | `observe` |   | observe |
+| `slasher/window` | `info` | `observe` |   | observe |
+| `slasher/window` | `focus` | `user-input` | ✓ | interactive |
+| `slasher/window` | `set-state` | `user-input` | ✓ | interactive |
+| `slasher/window` | `maximize` / `minimize` / `restore` / `show` / `hide` | `user-input` | ✓ | interactive |
+| `slasher/window` | `move` | `user-input` | ✓ | interactive |
+| `slasher/window` | `capture` | `observe` |   | observe |
+| `slasher/window` | `close` | `user-input` | ✓ | interactive |
+| `slasher/input` | `text` / `keys` / `mouse` / `wheel` / `drag` / `context-menu` | `user-input` | ✓ | interactive |
+| `slasher/screen` | `enumerate` | `observe` |   | observe |
+| `slasher/screen` | `capture-full` / `capture-monitor` / `capture-region` / `capture-window` | `observe` |   | observe |
+| `slasher/screen` | `match-image` | `observe` |   | observe |
+| `slasher/element` | `find` / `exists` / `read-text` / `tree` / `info` / `find-in` | `observe` |   | observe |
+| `slasher/element` | `click` | `user-input` | ✓ | interactive |
+| `slasher/dialog` | `message` / `confirm` | `user-input` | ✓ | interactive |
+| `slasher/browser` | `open` / `close` | `process-app` | ✓ | interactive |
+| `slasher/browser` | `current` / `title` / `url` / `locate` / `dom-text` / `attribute` / `screenshot` / `links` / `windows` | `observe` |   | observe |
+| `slasher/browser` | `navigate` / `click` / `hover` / `type-text` / `press` / `upload` / `select-option` / `execute-js` | `user-input` | ✓ | interactive |
+| `slasher/io` | `step` / `log` / `warn` / `error` / `print` | `observe` |   | observe |
+| `slasher/io` | `wait` | `system-info` |   | observe |
+| `slasher/test` | `assert-*` (全) / `note` / `attach` | `observe` |   | observe |
+| `slasher/clipboard` | `read-text` | `clipboard` |   | interactive |
+| `slasher/clipboard` | `write-text` / `clear` | `clipboard` | ✓ | interactive |
+| `slasher/clipboard` | `has-content` | `observe` |   | observe |
+| `slasher/files` | `exists` / `info` / `list` / `read-text` / `read-bytes` / `watch` / `poll-events` | `file-read` |   | files |
+| `slasher/files` | `append-text` / `create-directory` | `file-write` |   | files |
+| `slasher/files` | `write-text` / `write-bytes` / `copy` / `move` / `delete` | `file-write, destructive` |   | destructive |
+| `slasher/files` | `stop-watch` | `observe` |   | observe |
+| `slasher/data` | `csv-read` / `csv-to-json` / `json-read` / `json-query` / `excel-read` / `excel-workbook` / `excel-read-first-sheet` | `file-read` |   | files |
+| `slasher/data` | `csv-write` / `json-write` | `file-write, destructive` |   | destructive |
+| `slasher/peer` | `list-peers` / `find-peer` / `info` / `capabilities` / `namespace-list` / `namespace-read` / `delegate-status` / `delegate-wait` / `delegate-fetch-log` | `network-out` |   | network |
+| `slasher/peer` | `delegate-run` | `network-out, peer-delegate` | ✓ | peer-delegate |
+
+`/scripts/check` は `.numa` スクリプトの `requiredCapabilities` を返す。
+`IMPORT module AS alias` と UFCS 呼び出しを静的解析して抽出する。
+run モードは同じ能力情報を `numadora.hostCall` イベントに記録する。
+
+INTERACTIVE 関数は `allowInteractiveInput` 承認なしでは fail closed する
+(`policy_denied`)。承認済みでも入力送信直前にフォアグラウンド ターゲットを
+再検証し、変わっていれば fail closed する。
 
 ## Runtime Boundary
 
-Slasher should host Numadora through a narrow runtime boundary:
+```text
+[script source (.numa)]
+   ↓
+1. Slasher が Web/MCP/HTTP/CLI で受信
+2. Slasher 内の C# Numadora インタプリタがパース + 検査
+3. AppOps プラグインが IMPORT slasher/... の .numai シグネチャを解決
+4. プラグイン C# ホスト バインディングが Numadora ホスト呼び出しを実行
+5. Slasher が run artifact を書き出す:
+   run.json, events.jsonl, summary.txt, report.html, screenshots, logs
+```
 
-1. Slasher receives `.numa` source through the existing Web, MCP, HTTP, or CLI
-   surfaces.
-2. Slasher invokes Numadora check/run through the contract in
-   `numadora-runtime-contract.md`.
-3. Numadora resolves Windows-control modules and calls Slasher host functions.
-4. Slasher executes GUI, browser, file, and RPA actions through the existing C#
-   server code.
-5. Slasher emits the same artifact family as v1 runs: `run.json`,
-   `events.jsonl`, `summary.txt`, `report.html`, screenshots, and logs.
+Numadora インタプリタは **Slasher 内蔵 (C#)**。外部ランタイム依存なし。
+過去の Rust プロトタイプは設計参照用にのみ存在し、実行時に呼び出されない。
 
-The first implementation can use a process bridge to the local Numadora CLI.
-Embedding can be reconsidered after check/run behavior is stable.
+### モジュール解決順 (numadora-language-spec.md 6.3)
+
+1. プラグイン埋め込みリソース (Available な AppOps プラグイン由来) を最優先
+2. ワークスペース ローカル `.numai`
+3. ワークスペース ローカル `.numa`
+4. `std/` プレフィックス → 標準ライブラリ
+
+### 純粋性検査と式中ホスト呼び出し
+
+すべての `EFFECT` ホスト関数は不純として扱う。式の文脈で呼ぶことは
+`type_impure_in_expression` で拒否される (`numadora-language-spec.md` 3.5.1)。
+スクリプトは文として呼ぶか、戻り値を `LET` に束縛する。
 
 ## Host Binding Policy
 
-N0 uses `.numa` stub modules only to prove that Slasher scripts can be parsed
-and checked by the current Numadora implementation.
+`slasher-plugin-architecture.md` に従う:
 
-N1/N2 should replace or back those stubs with host bindings while preserving
-the same Numadora-facing signatures. The Slasher side owns:
+- 各プラグインは自身の `.numai` を埋め込みリソースとして持つ
+- C# 側のホスト バインディング クラス (`<PluginName>HostBindings`) が実装を提供
+- 起動時に `.numai` シグネチャと C# 実装の整合性を検査 (不整合は `module_interface_mismatch`)
+- リソース参照は `OPAQUE TYPE` (`AppRef`, `WindowRef` 等)
 
-- function names and argument order
-- mapping to existing C# automation APIs
-- event and artifact emission
-- structured error conversion
-- compatibility with Web, MCP, HTTP, and CLI surfaces
+### Slasher が所有する責務
 
-Numadora should own:
+- v0.2 `.numa` プロファイルのパース / 検査 / 実行
+- モジュール / IMPORT セマンティクス
+- 関数呼び出しの評価 (UFCS 解決を含む)
+- AppOps プラグインのライフサイクルと登録 (`/plugins`)
+- run artifact の生成
 
-- parsing and checking `.numa`
-- module/import semantics
-- type checking
-- function call evaluation
-- any future generic host-call mechanism
+### Slasher が所有しない責務
 
-Slasher-specific syntax should not be added to Numadora. Slasher can provide
-application-owned modules and host bindings, but if Windows automation needs a
-language feature, it should be justified as a general Numadora feature.
+- Numadora 言語自体への Slasher 固有構文の追加
+- 型システムの基本構造の変更
+
+Slasher が新しい言語機能を必要としたら、それは Numadora 全体に有益な機能として
+提案する。
 
 ## Error And Evidence Contract
 
-Check mode must not execute GUI actions. It should return diagnostics that can
-be mapped to the existing Slasher check response shape:
+### Check モード
 
-- code
-- message
-- file
-- line
-- column
-- actionable hint, when available
-- raw Numadora diagnostic details, when useful
+各診断は以下のフィールドを持つ:
 
-Run mode should preserve Slasher's evidence loop. Each host call should produce
-the usual command event metadata and, when relevant, screenshots or other
-artifacts. Failed commands should include the `.numa` source location when the
-runtime can provide it.
+- `code` (例: `name_undefined_module`, `type_mismatch`)
+- `message`
+- `file`
+- `line`
+- `column`
+- `severity`
+- 対処ヒント (可能な場合)
+- 詳細情報 (Numadora 由来の `details`)
 
-## Explicit Non-Goals
+Check モードは GUI アクションを実行しない。INTERACTIVE 関数や副作用関数を
+呼ぶ `.numa` でも、構文・型のみ検査する。
 
-The current integration does not require:
+### Run モード
 
-- `.numai` interface loading
-- `IMPORT slasher/app AS app`
-- top-level command syntax such as `io.step "open notepad"`
-- bare v1-style commands such as `start notepad.exe`
-- a compatibility parser for old `.slasher` files
-- compile-to-exe support
+各ホスト呼び出しは `numadora.hostCall` イベントを生成:
 
-These can be revisited only after the current `.numa` check/run path is useful.
+- `module` + `function` (例: `slasher/window`, `focus`)
+- `arguments` (リダクション ポリシー適用後)
+- `policyInput` (能力評価コンテキスト: profile, target identity, ...)
+- `policyDecision` (allow/deny/require_approval の結果)
+- `target` メタデータ (例: 解決済み window handle)
+- 実行結果 (success または正規化された `RuntimeError`)
+
+失敗したホスト呼び出しは `.numa` のソース位置に加え、プラグイン名と
+`.numai` 上の関数定義位置を含む。
+
+ホスト例外正規化テーブル (`numadora-language-spec.md` 9.6) で C# 側例外を
+Numadora `RuntimeError.code` に変換:
+
+| C# 例外 | code |
+|---|---|
+| `ArgumentException` | `host_invalid_argument` |
+| `TimeoutException` | `host_timeout` |
+| `UnauthorizedAccessException` | `host_access_denied` |
+| `IOException` | `host_io_error` |
+| `OperationCanceledException` | `host_cancelled` |
+| `PlatformNotSupportedException` | `platform_not_supported` |
+| `Win32Exception` | `host_win32_error` |
+| その他 | `host_unknown_error` |
+
+ポリシー拒否は `code = "policy_denied"`。
+
+## v0.1 で「Non-Goals」だった項目の再評価
+
+旧 integration ドキュメントが「現状不要」とした項目のうち、v0.2 で **採用された**
+ものと **依然として不採用** のものを整理:
+
+| 項目 | v0.2 状態 | 根拠 |
+|---|---|---|
+| `.numai` インターフェイス ロード | **採用** | `slasher-plugin-architecture.md` 4 章 (各プラグインが埋め込みリソースで保持) |
+| `IMPORT slasher/app AS app` (slash) | **採用** | `numadora-language-spec.md` 6.3 |
+| top-level コマンド構文 (`io.step "..."`) | 不採用 | マクロなし方針 (原則 4) |
+| bare v1 コマンド (`start notepad.exe`) | 不採用 | Q-L3 ハードカット |
+| `.slasher` 互換パーサ | 不採用 | Q-L3 ハードカット (manual port のみ) |
+| compile-to-exe | 不採用 (スコープ外) | Slasher は HTTP サーバとして配布、`PublishSingleFile` で配布 |
 
 ## Implementation Phases
 
-The detailed phase plan lives in `numadora-migration-plan.md`. At a high level:
+詳細は `numadora-migration-plan.md` および `slasher-plugin-architecture.md` 9 章。
+横断的な PR シーケンス:
 
-1. N0 freezes runtime discovery and validates a current-spec sample.
-2. N1 exposes the smallest useful Slasher module surface.
-3. N2 connects Slasher's check endpoint to Numadora.
-4. N3 runs a `.numa` script through Slasher and emits normal artifacts.
-5. N4 expands module coverage for real AI-driven tests.
-6. N5 adds ergonomic macro support only if Numadora supports it.
-7. N6 optionally provides historical porting assistance for old `.slasher` files.
-8. N7 keeps public script check/run Numadora-only.
+| PR | 内容 | 由来 |
+|---|---|---|
+| **AppOps PR-1** | フォルダ移動 + namespace + interface 分割 + プラグイン契約 (ハードカット) | layer/plugin |
+| **AppOps PR-2** | NetArchTest 依存方向ルール | layer/plugin |
+| **AppOps PR-3** | DI を PluginHost ベースに、OS 検出と CheckAvailability | plugin |
+| **AppOps PR-4** | `[SupportedOSPlatform("windows")]` + `UnsupportedXxx` スタブ | layer |
+| **AppOps PR-5** | self-contained single-file publish (Windows) | layer |
+| **AppOps PR-8** | `/plugins` エンドポイント + プラグイン状態の HTTP 公開 | plugin |
+| **Lang PR-A** | spec 改訂 (v0.2) | language-redesign (完了) |
+| **Lang PR-B+C** | サンプル `.numa` の v0.2 書き換え + パーサ更新 (ハードカット 1 PR) | Q6 |
+| **Lang PR-D** | `.numai` ホスト登録機構の C# 側実装 | language-redesign |
+| **Lang PR-E** | 既存ホスト関数を `.numai` + プラグイン C# クラスに移行 | language-redesign |
+| **Lang PR-F** | `Option[T]` / `MATCH` / `OR FAIL` / `RuntimeError` 実装 | language-redesign |
+| **Lang PR-G** | リソース参照を `OPAQUE TYPE` に切替 (`"window:last"` 文字列廃止) | language-redesign |
+| **Lang PR-H** | トレーリング ブロック構文 + UFCS | language-redesign |
+| **Lang PR-J** | ドキュメント整合 (本ドキュメント、`slasher-script.md`) — 既に完了 | language-redesign |
 
 ## Open Questions
 
-- How should host bindings be represented in the current Numadora runtime?
-- Should Slasher run Numadora as an external process long term, or embed it?
-- What is the minimal source-location payload needed for useful run errors?
-- Which historical v1 samples, if any, are important enough to port manually?
+- 旧 N0〜N7 フェーズ表記 (`numadora-migration-plan.md`) と新 PR-1〜H の整合をどう取るか
+- 各プラグイン `.numai` の最終シグネチャ確定 (本ドキュメントの能力テーブルと一致させる)
+- `slasher/clipboard`, `slasher/files`, `slasher/data` の plugin 化判断 (Io 層所有か AppOps プラグインか)
+- `numadora-runtime-contract.md` の更新 (テキスト RPC 廃止、型付き直接呼び出しへ)
+- v0.2 サンプル `.numa` のリリース時期と互換性表記

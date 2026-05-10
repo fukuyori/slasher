@@ -97,7 +97,8 @@ Field meanings:
 
 ## Host Call Policy Input
 
-Every Numadora host call should be checked against a stable JSON input shape.
+Every Numadora host call should be checked against a stable JSON input shape
+(Numadora v0.2.1 spec の能力クラス識別子と整合):
 
 ```json
 {
@@ -106,16 +107,19 @@ Every Numadora host call should be checked against a stable JSON input shape.
   "purpose": "local-test",
   "surface": "mcp",
   "capability": {
-    "module": "slasher_input",
-    "function": "Text",
-    "class": "User-input",
+    "module": "slasher/input",
+    "function": "text",
+    "classes": ["user-input"],
+    "interactive": true,
     "profile": "interactive"
   },
   "hostCall": {
-    "module": "slasher_input",
-    "function": "Text",
+    "module": "slasher/input",
+    "function": "text",
     "arguments": ["hello"]
   },
+  "scriptRequires": ["process-app", "user-input", "observe"],
+  "delegationDepth": 0,
   "target": {
     "kind": "window",
     "title": "Untitled - Notepad",
@@ -130,6 +134,14 @@ Every Numadora host call should be checked against a stable JSON input shape.
 }
 ```
 
+フィールドの意味:
+
+- `capability.classes`: ホスト関数の `EFFECT(class, ...)` から取得した能力クラス配列
+  (`numadora-language-spec.md` 1.4.1 の 13 種から)
+- `capability.interactive`: `INTERACTIVE` 修飾子の有無
+- `scriptRequires`: スクリプトの `REQUIRES (...)` 宣言 (静的検査済)
+- `delegationDepth`: 委譲経由 run なら 1 以上 (再帰委譲ガード用)
+
 The first evaluator can be a C# in-process rule engine. The shape should be
 kept OPA-friendly so it can later become Rego input.
 
@@ -137,19 +149,32 @@ kept OPA-friendly so it can later become Rego input.
 
 These rules should be enforced before real host-call execution lands:
 
-1. Missing capability metadata denies the host call.
-2. Missing run purpose denies non-observe host calls.
-3. `secret` or `sensitive` input lineage denies clipboard, browser upload,
-   network, and unredacted log output unless an explicit policy allows it.
-4. `User-input` calls require a selected or foreground target identity in the
-   run event.
-5. `Process/app` calls must record executable name and arguments.
-6. Destructive, browser-data, secrets, scheduling, and network/remote classes
-   remain denied until explicit policy settings exist.
-7. A denied host call must produce a normal Slasher error event with the policy
-   input and decision reason, with secret values redacted.
+1. **Missing capability metadata denies the host call.**
+2. **REQUIRES と能力の整合**: ホスト関数が必要とする能力 (`capability.classes`) が
+   `scriptRequires` に含まれない場合は `requires_missing_capability` で拒否
+   (check 段階で本来検出されるが、ランタイムでも fail-closed で再検証)。
+3. **能力プロファイル不適合**: 現行プロファイルが `scriptRequires` の全能力を許可
+   していなければ `policy_denied`。
+4. Missing run purpose denies non-observe host calls.
+5. `secret` または `sensitive` input lineage は `clipboard`, `browser-data`,
+   `network-out`, `network-in` 系および unredacted log output を拒否
+   (明示ポリシーで上書き可)。
+6. `user-input` 能力を持つ呼び出しは selected/foreground target identity が必要。
+   ない場合は `numadora_policy_missing_target` で拒否。
+7. `process-app` 能力を持つ呼び出しは executable name と arguments を記録。
+8. **再帰委譲禁止**: `capability.classes` に `peer-delegate` を含み、かつ
+   `delegationDepth >= 1` なら `policy_recursive_delegation` で拒否。
+9. `destructive`, `browser-data`, `secrets`, `scheduling`, `network-out`,
+   `network-in` 等は明示ポリシー設定があるまで拒否。
+10. A denied host call must produce a normal Slasher error event with the policy
+    input and decision reason, with secret values redacted.
 
 ## Relationship To Current Numadora Work
+
+> **Note**: 以下の "Already implemented groundwork" 節は v0.2 までの C# 実装で
+> v0.1 スタイルのホスト呼び出し名 (`slasher_window.WaitForTitle` 等) を参照する。
+> v0.2.1 では `slasher/window.wait-for-title` 等のスラッシュ + kebab-case 形式に
+> 置換予定 (Sec PR-F での実装更新時)。本ノートは履歴として保持する。
 
 Already implemented groundwork:
 

@@ -1,14 +1,23 @@
 using System.Globalization;
 using System.Text;
+using Microsoft.Extensions.Hosting;
 
 namespace Slasher.Data;
 
 public sealed class CsvAutomationService
 {
+    private readonly string? _contentRoot;
+
+    public CsvAutomationService(IHostEnvironment? environment = null)
+    {
+        _contentRoot = environment?.ContentRootPath;
+    }
+
     public CsvReadResponse Read(CsvReadRequest request)
     {
         var delimiter = GetDelimiter(request.Delimiter);
-        var text = File.ReadAllText(request.Path, Encoding.UTF8);
+        var path = ResolvePath(request.Path);
+        var text = File.ReadAllText(path, Encoding.UTF8);
         var rows = Parse(text, delimiter);
         var hasHeader = request.HasHeader ?? true;
 
@@ -28,7 +37,7 @@ public sealed class CsvAutomationService
 
         var objects = dataRows.Select(row => ToObject(headers, row)).ToArray();
         return new CsvReadResponse(
-            Path.GetFullPath(request.Path),
+            Path.GetFullPath(path),
             delimiter.ToString(),
             hasHeader,
             headers,
@@ -69,6 +78,13 @@ public sealed class CsvAutomationService
         }
 
         return delimiter[0];
+    }
+
+    private string ResolvePath(string path)
+    {
+        return Path.IsPathRooted(path) || string.IsNullOrWhiteSpace(_contentRoot)
+            ? path
+            : Path.Combine(_contentRoot, path);
     }
 
     private static List<string[]> Parse(string text, char delimiter)

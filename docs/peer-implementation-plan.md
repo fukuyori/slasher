@@ -6,6 +6,14 @@ The implementation must stay local-first and fail-closed. Peer functionality
 should begin as read-only namespace inspection, then observe-only delegated
 runs, and only later interactive or mutating operations.
 
+> **v0.2.1 整合**: 本ドキュメントは Numadora v0.2.1 spec
+> (`numadora-language-spec.md`) を前提とする。ピア通信は言語側で
+> `slasher/peer` モジュール (`scripts/numadora-host/slasher/peer.numai`、
+> 能力 `network-out` / `peer-delegate`) として一級概念で公開される
+> (`numadora-security-network-design.md` 2.4)。Slasher の層構成は
+> `slasher-layer-architecture.md` の 5 層 (`Slasher.Network` を独立層) に従い、
+> Peers 関連実装は `Slasher.Network.Peers` namespace に置く。
+
 ## Phase Names
 
 Use `Peer P0` through `Peer P9` for tracking. These phases are independent from
@@ -23,6 +31,15 @@ policy, and artifact contracts.
 - Every side-effecting peer operation produces normal Slasher events or run
   artifacts.
 - Peer protocol DTOs must not depend on Windows-specific types.
+- Peer 関連の C# コードは `Slasher.Network.Peers` namespace 配下
+  (`slasher-layer-architecture.md` 5 層構成)。Core / AppOps / Io への直接依存は
+  禁止 (NetArchTest で検証)。
+- 委譲経由で起動された run は **再帰的に `delegate-run` を呼べない**
+  (`policy_recursive_delegation`、`numadora-language-spec.md` 9.6.1)。
+  実装時は run コンテキストの `delegation-depth` を伝播する。
+- スクリプト側の `REQUIRES (network-out, peer-delegate, ...)` 宣言は静的検査
+  で必須。ランタイム ポリシーは `scriptRequires` を policy input に含めて再検証
+  (`numadora-lineage-policy-plan.md`)。
 
 ## Peer P0: Contracts Only
 
@@ -36,15 +53,16 @@ Primary changes:
 - add execution-scope metadata to run models where needed
 - add tests for pure model/policy behavior
 
-Suggested files:
+Suggested files (5 層構成適用後):
 
-- `src/Slasher/Automation/AutomationModels.cs`
-- `src/Slasher/Automation/NumadoraPolicyEvaluator.cs`
-- `src/Slasher/Peers/PeerModels.cs`
-- `src/Slasher/Peers/PeerCapabilities.cs`
-- `src/Slasher/Peers/ResourceAddress.cs`
-- `tests/Slasher.Tests/PeerModelTests.cs`
-- `tests/Slasher.Tests/PeerPolicyTests.cs`
+- `src/Slasher/Core/Numadora/NumadoraPolicyEvaluator.cs`
+- `src/Slasher/Core/Models/AutomationModels.cs`
+- `src/Slasher/Network/Peers/PeerModels.cs`
+- `src/Slasher/Network/Peers/PeerCapabilities.cs`
+- `src/Slasher/Network/Peers/ResourceAddress.cs`
+- `scripts/numadora-host/slasher/peer.numai` (ホスト バインディング契約は既定義済)
+- `tests/Slasher.Tests/Network/PeerModelTests.cs`
+- `tests/Slasher.Tests/Network/PeerPolicyTests.cs`
 
 Minimum model set:
 
@@ -90,11 +108,11 @@ Primary changes:
 
 Suggested files:
 
-- `src/Slasher/Peers/PeerIdentityStore.cs`
-- `src/Slasher/Peers/PeerRegistry.cs`
-- `src/Slasher/Peers/PeerOptions.cs`
+- `src/Slasher/Network/Peers/PeerIdentityStore.cs`
+- `src/Slasher/Network/Peers/PeerRegistry.cs`
+- `src/Slasher/Network/Peers/PeerOptions.cs`
 - `src/Slasher/Program.cs`
-- `tests/Slasher.Tests/PeerRegistryTests.cs`
+- `tests/Slasher.Tests/Network/PeerRegistryTests.cs`
 
 Configuration shape:
 
@@ -113,7 +131,8 @@ Acceptance criteria:
 - missing registry is not fatal while peer mode is disabled
 - invalid registry fails clearly when peer mode is enabled
 - trust profiles parse as `unknown`, `known`, `observed`, `interactive`,
-  `operator`, or `admin-peer`
+  `operator`, or `admin-peer` (`slasher/peer.numai` の `TrustProfile` 列挙と整合;
+  v0.2.1 で言語側に公開される 3 種 `known`/`observed`/`interactive` が中核)
 - registry entries do not grant capabilities by themselves
 
 Verification:
@@ -142,10 +161,10 @@ Primary changes:
 
 Suggested files:
 
-- `src/Slasher/Api/SlasherEndpointExtensions.Peers.cs`
-- `src/Slasher/Api/SlasherEndpointExtensions.cs`
-- `src/Slasher/Peers/PeerEndpointService.cs`
-- `tests/Slasher.Tests/PeerEndpointTests.cs`
+- `src/Slasher/Api/Endpoints/SlasherEndpointExtensions.Peers.cs`
+- `src/Slasher/Api/Endpoints/SlasherEndpointExtensions.cs`
+- `src/Slasher/Network/Peers/PeerEndpointService.cs`
+- `tests/Slasher.Tests/Network/PeerEndpointTests.cs`
 
 Acceptance criteria:
 
@@ -199,9 +218,9 @@ Initial namespace:
 
 Suggested files:
 
-- `src/Slasher/Peers/NamespaceService.cs`
-- `src/Slasher/Peers/NamespaceResourceCatalog.cs`
-- `tests/Slasher.Tests/NamespaceServiceTests.cs`
+- `src/Slasher/Network/Peers/NamespaceService.cs`
+- `src/Slasher/Network/Peers/NamespaceResourceCatalog.cs`
+- `tests/Slasher.Tests/Network/NamespaceServiceTests.cs`
 
 Acceptance criteria:
 
@@ -247,10 +266,10 @@ Primary changes:
 
 Suggested files:
 
-- `src/Slasher/Peers/ResourceReadService.cs`
-- `src/Slasher/Peers/ResourceReadModels.cs`
-- `src/Slasher/Automation/AutomationRunArtifactStore.Read.cs`
-- `tests/Slasher.Tests/ResourceReadServiceTests.cs`
+- `src/Slasher/Network/Peers/ResourceReadService.cs`
+- `src/Slasher/Network/Peers/ResourceReadModels.cs`
+- `src/Slasher/Core/Runs/AutomationRunArtifactStore.Read.cs`
+- `tests/Slasher.Tests/Network/ResourceReadServiceTests.cs`
 
 Acceptance criteria:
 
@@ -296,10 +315,10 @@ Primary changes:
 
 Suggested files:
 
-- `src/Slasher/Peers/ResourceInvokeService.cs`
-- `src/Slasher/Peers/ResourceInvokeModels.cs`
-- `src/Slasher/Automation/AutomationRunArtifactStore.Writing.cs`
-- `tests/Slasher.Tests/ResourceInvokeServiceTests.cs`
+- `src/Slasher/Network/Peers/ResourceInvokeService.cs`
+- `src/Slasher/Network/Peers/ResourceInvokeModels.cs`
+- `src/Slasher/Core/Runs/AutomationRunArtifactStore.Writing.cs`
+- `tests/Slasher.Tests/Network/ResourceInvokeServiceTests.cs`
 
 Acceptance criteria:
 
@@ -342,11 +361,11 @@ Primary changes:
 
 Suggested files:
 
-- `src/Slasher/Peers/PeerRunService.cs`
-- `src/Slasher/Peers/PeerRunModels.cs`
-- `src/Slasher/Automation/AutomationRunModels.cs`
-- `src/Slasher/Automation/AutomationRunArtifactStore.Events.cs`
-- `tests/Slasher.Tests/PeerRunServiceTests.cs`
+- `src/Slasher/Network/Peers/PeerRunService.cs`
+- `src/Slasher/Network/Peers/PeerRunModels.cs`
+- `src/Slasher/Core/Models/AutomationRunModels.cs`
+- `src/Slasher/Core/Runs/AutomationRunArtifactStore.Events.cs`
+- `tests/Slasher.Tests/Network/PeerRunServiceTests.cs`
 
 Acceptance criteria:
 
@@ -362,50 +381,69 @@ Verification:
 dotnet test
 ```
 
-Manual probe:
+Manual probe (v0.2.1 構文):
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:5055/peer/runs -Method Post -ContentType application/json -Body '{"language":"numadora","script":"IMPORT slasher_io AS io\nFUNC main()\n  io.Log(\"peer observe\")\nEND","policyProfile":"observe","requestedCapabilities":["observe.log"]}'
+Invoke-RestMethod http://127.0.0.1:5055/peer/runs -Method Post -ContentType application/json -Body @'
+{
+  "language": "numadora",
+  "script": "MODULE peer-observe\nREQUIRES (observe)\nIMPORT slasher/io AS io\nEXPORT FUNC main()\n  io.log(\"peer observe\")\nEND\n",
+  "policyProfile": "observe",
+  "purpose": "peer-smoke"
+}
+'@
 ```
 
-## Peer P7: Portable Core Extraction
+スクリプト側の `REQUIRES (observe)` と `policyProfile` (`observe`) が整合する場合のみ
+run が許可される。`requestedCapabilities` フィールドは v0.2.1 では `REQUIRES` から
+自動推定されるため省略可。
 
-Goal: move contracts and policy-neutral logic out of the Windows application
-project.
+## Peer P7: Portable Core 整合 (5 層構成)
+
+Goal: `slasher-layer-architecture.md` の 5 層構成と整合させ、Peer 関連実装を
+Network 層配下にまとめる。
+
+> **位置付け変更**: 当初は別 csproj `Slasher.Core` への抽出を計画していたが、
+> Q-L1〜L6 の決定で **単一 csproj 維持 + namespace 規律** を採用 (NetArchTest
+> で強制)。Portable Core は **論理的な Core 層** として `Slasher.Core` namespace
+> に集約し、AppOps 層との抽象化境界 (`Core/AppOps/Abstractions/` interface) で
+> OS 非依存を実現する。
 
 Primary changes:
 
-- add `src/Slasher.Core/Slasher.Core.csproj`
-- move portable models into `Slasher.Core`
-- keep ASP.NET endpoints in `src/Slasher`
-- keep Windows services behind adapter-facing interfaces
-- update tests to reference `Slasher.Core` where appropriate
+- Peer 関連を `src/Slasher/Network/Peers/` 配下に移動 (旧 `src/Slasher/Peers/`)
+- 共通モデルを `src/Slasher/Core/Models/` 配下に移動
+- ホスト interface を `src/Slasher/Core/AppOps/Abstractions/` に集約
+- Windows 固有実装は `src/Slasher/AppOps/Plugins/WindowsNative/` に移動
+  (`slasher-plugin-architecture.md` 参照)
+- NetArchTest で「Network → Core (interface のみ)」「Network ↮ AppOps」依存方向を強制
 
-Suggested project shape:
+Suggested project shape (5 層構成):
 
 ```text
-src/
-  Slasher.Core/
+src/Slasher/
+  Api/             — HTTP server
+  Core/            — Numadora interpreter, runs, models, abstractions
+    AppOps/Abstractions/
+    Numadora/
     Runs/
-    Capabilities/
-    Policy/
-    Evidence/
-    Namespace/
+    Models/
+  Io/              — Files, Data, Clipboard
+  Network/         — Peers, HTTP client, discovery
     Peers/
-  Slasher/
-    Api/
-    Automation/
-    Peers/
-    Windows/
-    Files/
+  AppOps/          — OS 別プラグイン (WindowsNative, Browser, ...)
+    PluginHost/
+    Plugins/
 ```
 
 Acceptance criteria:
 
-- `Slasher.Core` has no dependency on ASP.NET Core or Windows-specific APIs
-- existing app still builds and runs
-- existing tests pass
-- peer DTO and namespace tests primarily target `Slasher.Core`
+- `Slasher.Network.*` namespace は `Slasher.Core.*` interface だけに依存
+  (NetArchTest で検証)
+- `Slasher.AppOps.*` への直接依存禁止 (検証済)
+- 既存アプリ ビルド + テスト通過
+- ピア DTO とネームスペース テストが `Slasher.Core.Models.*` と
+  `Slasher.Network.Peers.*` を主に対象とする
 
 Verification:
 
@@ -498,9 +536,13 @@ Acceptance criteria:
 Pause implementation and revisit the design if any of these appear:
 
 - peer route requires bypassing existing artifact path validation
-- peer route needs direct calls into `WindowsAutomationService` from transport
-  code
+- peer route needs direct calls into AppOps プラグイン (例:
+  `WindowsNative.WindowsAppLauncher`) from transport code (NetArchTest 違反)
 - policy decisions differ between local script execution and peer execution
 - an unknown peer can list or read machine resources
 - an observe-only profile can trigger input, clipboard, file-write, browser-data,
   destructive, unattended, or relay behavior
+- 委譲経由で起動された run がさらに `delegate-run` を呼べてしまう
+  (`policy_recursive_delegation` のガードが効いていない)
+- Network 層が AppOps プラグインに直接依存する (`Slasher.Core.AppOps.Abstractions`
+  interface 経由でなく、具象型に直接アクセスする)

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
+using Microsoft.Extensions.Hosting;
 
 namespace Slasher.Data;
 
@@ -10,9 +11,17 @@ public sealed class ExcelAutomationService
     private static readonly XNamespace Relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace PackageRelationships = "http://schemas.openxmlformats.org/package/2006/relationships";
 
+    private readonly string? _contentRoot;
+
+    public ExcelAutomationService(IHostEnvironment? environment = null)
+    {
+        _contentRoot = environment?.ContentRootPath;
+    }
+
     public ExcelWorkbookResponse GetWorkbook(ExcelReadRequest request)
     {
-        using var archive = ZipFile.OpenRead(request.Path);
+        var path = ResolvePath(request.Path);
+        using var archive = ZipFile.OpenRead(path);
         var workbook = LoadXml(archive, "xl/workbook.xml");
         var sheets = workbook.Root?
             .Element(Spreadsheet + "sheets")?
@@ -22,12 +31,13 @@ public sealed class ExcelAutomationService
             .Select(name => name!)
             .ToArray() ?? [];
 
-        return new ExcelWorkbookResponse(Path.GetFullPath(request.Path), sheets);
+        return new ExcelWorkbookResponse(Path.GetFullPath(path), sheets);
     }
 
     public ExcelReadResponse Read(ExcelReadRequest request)
     {
-        using var archive = ZipFile.OpenRead(request.Path);
+        var path = ResolvePath(request.Path);
+        using var archive = ZipFile.OpenRead(path);
         var workbook = LoadXml(archive, "xl/workbook.xml");
         var workbookRels = LoadXml(archive, "xl/_rels/workbook.xml.rels");
         var sharedStrings = LoadSharedStrings(archive);
@@ -52,7 +62,7 @@ public sealed class ExcelAutomationService
 
         var objects = dataRows.Select(row => ToObject(headers, row)).ToArray();
         return new ExcelReadResponse(
-            Path.GetFullPath(request.Path),
+            Path.GetFullPath(path),
             sheetInfo.Name,
             hasHeader,
             headers,
@@ -194,6 +204,13 @@ public sealed class ExcelAutomationService
     private static string DefaultHeader(int index)
     {
         return $"column{(index + 1).ToString(CultureInfo.InvariantCulture)}";
+    }
+
+    private string ResolvePath(string path)
+    {
+        return Path.IsPathRooted(path) || string.IsNullOrWhiteSpace(_contentRoot)
+            ? path
+            : Path.Combine(_contentRoot, path);
     }
 
     private static XDocument LoadXml(ZipArchive archive, string path)

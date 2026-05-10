@@ -1,6 +1,6 @@
 # Slasher
 
-Current version: 0.2.5.
+Current version: 0.3.0.
 
 Slasher is a small Windows automation server written in C#. It exposes HTTP APIs for starting applications, enumerating and manipulating windows, sending keyboard and mouse input, and taking screenshots.
 
@@ -63,29 +63,101 @@ Open the web control panel:
 http://127.0.0.1:5055/
 ```
 
+Open the showcase demo:
+
+```text
+http://127.0.0.1:5055/demo.html
+```
+
+The demo uses sample data under `artifacts/demo`. Prepare it once with:
+
+```powershell
+.\scripts\prepare-demo-assets.ps1
+```
+
+The showcase focuses on visible automation: start Notepad, type text, capture
+the desktop state, and present sample CSV/Excel data in the browser.
+
+Or start the showcase in one step:
+
+```powershell
+.\scripts\start-showcase-demo.ps1
+```
+
+This opens `demo.html?autorun=1`, so the showcase starts automatically. Use
+`-NoAutoRun` when you only want to open the screen without executing it.
+
+To run the same showcase without opening the HTML screen:
+
+```powershell
+.\scripts\run-showcase-demo.ps1
+```
+
+This executes the API scenario directly and writes `showcase-capture.bmp` and
+`showcase-summary.json` under `artifacts/demo`.
+
+To capture a specific monitor, pass its screen index:
+
+```powershell
+.\scripts\run-showcase-demo.ps1 -ListScreens
+.\scripts\run-showcase-demo.ps1 -ScreenIndex 0
+```
+
+To run an Excel application showcase:
+
+```powershell
+.\scripts\run-excel-showcase-demo.ps1
+```
+
+This opens `workbook.xlsx` in the associated spreadsheet application,
+waits for the workbook window through explicit Numadora app/window references,
+maximizes that window, captures it, closes it, and writes
+`excel-showcase-summary.json`. The workbook remains visible briefly after the
+capture before it closes. Use `-ScreenIndex 0` to capture a specific monitor.
+The visible app-control scenario is written as Numadora; the application close
+step is expressed as `excel.Close()`, while the workbook window is handled as a
+`WindowRef` with methods such as `workbook.Maximize()` and
+`workbook.Capture(...)`. The
+PowerShell entrypoint only prepares assets, starts the local server, and calls
+`/scripts/run-file`. It generates `artifacts/demo/excel-showcase-run.numa`
+from the same flow as `scripts/numadora-samples/excel-showcase.numa`.
+
 API metadata is available at:
 
 ```text
 http://127.0.0.1:5055/api
 ```
 
+List connected screens:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5055/screens
+```
+
+Capture one screen:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5055/screenshot -Method Post -ContentType application/json -Body '{"screenIndex":0,"maxWidth":1280,"maxHeight":720}'
+```
+
 ## Numadora N0 Probe
 
-During the Numadora migration, the local Numadora source checkout can be probed
-with:
+Slasher owns the `.numa` check/run path. The helper below sends the script to
+Slasher's C# interpreter through the local HTTP API:
 
 ```powershell
 .\scripts\check-numadora.ps1 -Path scripts\numadora-samples\notepad-check.numa
 ```
 
-Set `NUMADORA_HOME` if Numadora is not located at
-`D:\home\source\rust\Numadora`.
-
-To verify the full N0 probe state:
+To verify v0.2.1 spec compliance of all `.numai` and `.numa` v0.2.1 samples:
 
 ```powershell
 .\scripts\verify-numadora-n0.ps1
 ```
+
+This runs static checks (no server needed). Add `-LiveCheck` to also POST each
+sample to `/scripts/check` (will fail until Lang PR-B+C updates the parser
+to v0.2.1; use `-AllowKnownFailure` to tolerate during the transition).
 
 ## Codex Integration
 
@@ -191,13 +263,14 @@ Example Numadora script:
 
 ```text
 IMPORT slasher_io AS io
-IMPORT slasher_app AS app
-IMPORT slasher_window AS window
+IMPORT slasher_desktop AS desktop
 
 FUNC main()
   io.Log("hello from Codex through Slasher")
-  app.Start("notepad.exe")
-  window.WaitForTitle("Notepad", 10000)
+  LET appRef := desktop.StartApp("notepad.exe")
+  LET windowRef := appRef.WaitForWindow("Notepad", 10000)
+  windowRef.Focus()
+  appRef.Close()
 END
 ```
 
@@ -242,6 +315,28 @@ Optional bearer-token protection:
 
 ```powershell
 $env:SLASHER_API_KEY = "change-me"
+dotnet run --project src\Slasher\Slasher.csproj --urls http://127.0.0.1:5055
+```
+
+## Configuration
+
+Slasher reads `appsettings.json` (and `appsettings.Development.json` when
+`ASPNETCORE_ENVIRONMENT=Development`) from the workspace root.
+
+The full schema with comments lives in `appsettings.example.json`. Key sections:
+
+- `PeerMode` — peer-to-peer feature gate (`docs/peer-implementation-plan.md`)
+- `Plugins:<PluginName>` — per-plugin settings (`docs/slasher-plugin-architecture.md` 2.2.1)
+
+Each `Plugins:<Name>:enabled` defaults to `true`. Set it to `false` to make
+that plugin's `CheckAvailability()` return `Disabled`, hiding its host modules
+from `IMPORT slasher/...` resolution.
+
+Override via environment variables (ASP.NET Core convention, `:` → `__`):
+
+```powershell
+$env:Plugins__Browser__defaultBrowser = "chrome"
+$env:Plugins__Browser__headless = "true"
 dotnet run --project src\Slasher\Slasher.csproj --urls http://127.0.0.1:5055
 ```
 

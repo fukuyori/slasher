@@ -19,6 +19,14 @@ public sealed partial class ScriptRunService
         @"(?<alias>[A-Za-z_][A-Za-z0-9_]*)\.(?<function>[A-Za-z_][A-Za-z0-9_]*)\s*\(",
         RegexOptions.Compiled);
 
+    private static readonly Regex NumadoraMethodCallPattern = new(
+        @"(?<receiver>[A-Za-z_][A-Za-z0-9_]*)\.(?<method>WaitForWindow|Close|Focus|State|Maximize|Minimize|Restore|Capture)\s*\(",
+        RegexOptions.Compiled);
+
+    private static readonly Regex NumadoraLetBindingPattern = new(
+        @"\bLET\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*:=\s*(?<expr>.+)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private static readonly IReadOnlyDictionary<string, NumadoraBindingCapability> NumadoraBindingCapabilities =
         new Dictionary<string, NumadoraBindingCapability>(StringComparer.OrdinalIgnoreCase)
         {
@@ -28,18 +36,42 @@ public sealed partial class ScriptRunService
                 "Process/app",
                 "interactive",
                 "Starts a local application process and records process/window metadata."),
+            [CapabilityKey("slasher_app", "Close")] = new(
+                "slasher_app",
+                "Close",
+                "Process/app",
+                "interactive",
+                "Requests a local application reference to close and records process/window metadata."),
             [CapabilityKey("slasher_window", "WaitForTitle")] = new(
                 "slasher_window",
                 "WaitForTitle",
                 "Observe",
                 "observe",
                 "Inspects top-level windows until a matching title is found."),
+            [CapabilityKey("slasher_window", "WaitForApp")] = new(
+                "slasher_window",
+                "WaitForApp",
+                "Observe",
+                "observe",
+                "Inspects top-level windows owned by an application reference until a matching title is found."),
             [CapabilityKey("slasher_window", "Focus")] = new(
                 "slasher_window",
                 "Focus",
                 "User-input",
                 "interactive",
                 "Changes foreground focus to a target window."),
+            [CapabilityKey("slasher_window", "State")] = new(
+                "slasher_window",
+                "State",
+                "User-input",
+                "interactive",
+                "Changes an explicit or selected window state such as maximize, restore, or minimize."),
+            [CapabilityKey("slasher_window", "Close")] = new(
+                "slasher_window",
+                "Close",
+                "User-input",
+                "interactive",
+                "Requests an explicit or selected window to close and records the target metadata."),
             [CapabilityKey("slasher_input", "Text")] = new(
                 "slasher_input",
                 "Text",
@@ -82,6 +114,18 @@ public sealed partial class ScriptRunService
                 "Observe",
                 "observe",
                 "Captures the full desktop or current foreground target as screenshot evidence."),
+            [CapabilityKey("slasher_screen", "CaptureWindow")] = new(
+                "slasher_screen",
+                "CaptureWindow",
+                "Observe",
+                "observe",
+                "Captures an explicit window reference as screenshot evidence."),
+            [CapabilityKey("slasher_screen", "CaptureMonitor")] = new(
+                "slasher_screen",
+                "CaptureMonitor",
+                "Observe",
+                "observe",
+                "Captures a specific display monitor as screenshot evidence."),
             [CapabilityKey("slasher_element", "Find")] = new(
                 "slasher_element",
                 "Find",
@@ -211,6 +255,7 @@ public sealed partial class ScriptRunService
         }
 
         var requirements = new Dictionary<string, ScriptCapabilityRequirement>(StringComparer.OrdinalIgnoreCase);
+        var referenceTypes = InferNumadoraReferenceTypes(source, aliases);
         foreach (Match match in NumadoraAliasCallPattern.Matches(source))
         {
             var alias = match.Groups["alias"].Value;
@@ -220,7 +265,44 @@ public sealed partial class ScriptRunService
             }
 
             var function = match.Groups["function"].Value;
+            (module, function) = MapNumadoraBindingCapability(module, function);
             if (!NumadoraBindingCapabilities.TryGetValue(CapabilityKey(module, function), out var capability))
+            {
+                continue;
+            }
+
+            requirements[CapabilityKey(module, function)] = new ScriptCapabilityRequirement(
+                capability.Module,
+                capability.Function,
+                capability.CapabilityClass,
+                capability.Profile,
+                capability.Reason);
+        }
+
+        foreach (Match match in NumadoraMethodCallPattern.Matches(source))
+        {
+            var receiver = match.Groups["receiver"].Value;
+            if (aliases.ContainsKey(receiver))
+            {
+                continue;
+            }
+
+            if (!referenceTypes.TryGetValue(receiver, out var receiverType))
+            {
+                continue;
+            }
+
+            var (module, function) = (receiverType, match.Groups["method"].Value) switch
+            {
+                ("AppRef", "WaitForWindow") => ("slasher_window", "WaitForApp"),
+                ("AppRef", "Close") => ("slasher_app", "Close"),
+                ("WindowRef", "Focus") => ("slasher_window", "Focus"),
+                ("WindowRef", "State" or "Maximize" or "Minimize" or "Restore") => ("slasher_window", "State"),
+                ("WindowRef", "Close") => ("slasher_window", "Close"),
+                ("WindowRef", "Capture") => ("slasher_screen", "CaptureWindow"),
+                _ => default
+            };
+            if (module is null || !NumadoraBindingCapabilities.TryGetValue(CapabilityKey(module, function), out var capability))
             {
                 continue;
             }
@@ -237,6 +319,61 @@ public sealed partial class ScriptRunService
             .OrderBy(item => item.Module, StringComparer.OrdinalIgnoreCase)
             .ThenBy(item => item.Function, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private static IReadOnlyDictionary<string, string> InferNumadoraReferenceTypes(
+        string source,
+        IReadOnlyDictionary<string, string> aliases)
+    {
+        var referenceTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in source.Split(["\r\n", "\n"], StringSplitOptions.None))
+        {
+            var match = NumadoraLetBindingPattern.Match(line);
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            var name = match.Groups["name"].Value;
+            var expr = match.Groups["expr"].Value;
+            var firstCall = NumadoraAliasCallPattern.Match(expr);
+            if (!firstCall.Success)
+            {
+                continue;
+            }
+
+            var receiver = firstCall.Groups["alias"].Value;
+            var method = firstCall.Groups["function"].Value;
+            if (aliases.TryGetValue(receiver, out var module))
+            {
+                var mapped = MapNumadoraBindingCapability(module, method);
+                if (mapped.Module.Equals("slasher_app", StringComparison.OrdinalIgnoreCase)
+                    && mapped.Function.Equals("Start", StringComparison.OrdinalIgnoreCase))
+                {
+                    referenceTypes[name] = "AppRef";
+                }
+            }
+
+            if (referenceTypes.TryGetValue(receiver, out var receiverType)
+                && receiverType.Equals("AppRef", StringComparison.OrdinalIgnoreCase)
+                && method.Equals("WaitForWindow", StringComparison.OrdinalIgnoreCase))
+            {
+                referenceTypes[name] = "WindowRef";
+            }
+        }
+
+        return referenceTypes;
+    }
+
+    private static (string Module, string Function) MapNumadoraBindingCapability(string module, string function)
+    {
+        if (module.Equals("slasher_desktop", StringComparison.OrdinalIgnoreCase)
+            && function.Equals("StartApp", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("slasher_app", "Start");
+        }
+
+        return (module, function);
     }
 
     private static string CapabilityKey(string module, string function)

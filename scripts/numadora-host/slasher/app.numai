@@ -1,0 +1,39 @@
+# Slasher app/process operations.
+# Provided by WindowsNative plugin (Windows). Future: MacOSNative, LinuxNative.
+
+MODULE slasher/app
+
+IMPORT slasher/window AS window
+
+--- 起動済プロセスとその初期メタデータへの不透明参照。
+EXPORT OPAQUE TYPE AppRef
+
+--- アプリの観測情報 (info() で取得)。
+EXPORT RECORD AppInfo {
+  --- OS が割り当てたプロセス ID。
+  process-id: int,
+  --- 実行可能ファイルの絶対パス。
+  executable-path: string,
+  --- 起動時のコマンドライン全体。
+  command-line: string,
+}
+
+--- 実行ファイルを起動する。引数なし版。
+--- 例: app.start-app("notepad.exe")
+EXPORT INTERACTIVE EFFECT(process-app) FUNC start-app(file-name: string): AppRef
+
+--- 実行ファイルを引数付きで起動する。
+--- 例: app.start-app-with-args("powershell.exe", ["-NoProfile", "-Command", "Get-Date"])
+EXPORT INTERACTIVE EFFECT(process-app) FUNC start-app-with-args(file-name: string, args: array[string]): AppRef
+
+--- 起動済アプリのトップレベル ウィンドウを列挙する。
+EXPORT EFFECT(observe) FUNC enumerate-windows(target: AppRef): array[window.WindowRef]
+
+--- アプリのウィンドウがタイトルに一致するまで待機。タイムアウトなら None。
+EXPORT EFFECT(observe) FUNC wait-for-window(target: AppRef, title: string, timeout-ms: int): Option[window.WindowRef]
+
+--- アプリの観測情報を返す。
+EXPORT EFFECT(observe) FUNC info(target: AppRef): AppInfo
+
+--- アプリを終了する (WM_CLOSE → 必要に応じて TerminateProcess)。
+EXPORT INTERACTIVE EFFECT(process-app) FUNC close(target: AppRef): unit

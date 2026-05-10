@@ -279,6 +279,45 @@ Capability negotiation reports what the executor can support and what its
 current policy can allow for the requesting peer. The final decision still
 happens at run time, with concrete targets and parameters.
 
+### Numadora 言語側との対応 (v0.2.1)
+
+ピア通信は **`slasher/peer`** ホスト モジュール (`scripts/numadora-host/slasher/peer.numai`)
+として Numadora の一級概念で公開される。スクリプトは:
+
+```numadora
+MODULE remote-deploy
+REQUIRES (network-out, peer-delegate, observe)
+
+IMPORT slasher/peer AS peer
+
+EXPORT FUNC main()
+  LET ws = peer.find-peer("workstation") OR FAIL "not registered"
+  LET run-id = ws.delegate-run(script-source, "interactive", "remote-deploy")
+END
+```
+
+このスクリプトの `REQUIRES` に挙がる能力クラス (`network-out`, `peer-delegate`,
+`observe`) は本ドキュメントのピア能力名と以下のように対応する:
+
+| Numadora 能力クラス | ピア能力 (本ドキュメント) | 意味 |
+|---|---|---|
+| `network-out` | `peer.namespace.read`, `peer.resource.read`, `peer.capabilities.read`, `peer.artifact.read` | アウトバウンド ネットワーク呼び出し |
+| `peer-delegate` | `peer.run.delegate` | 他ピアへの run 委譲 |
+| `observe` | `observe.*` | 観測型操作 |
+| `user-input` | `input.*`, `window.*` | 入力操作 |
+| `process-app` | `app.start`, `app.close` | プロセス操作 |
+| `file-read` | `file.read` | ファイル読み取り |
+| `file-write` | `file.write` | ファイル書き込み |
+| `destructive` | `file.delete`, `destructive` | 破壊操作 |
+| `clipboard` | `clipboard.*` | クリップボード操作 |
+| `browser-data` | `browser.data.*` | ブラウザ データ操作 |
+| `secrets` | `secrets` | 秘密値アクセス |
+| `unattended` | `unattended` | 無人実行 |
+
+**再帰委譲は禁止** (`policy_recursive_delegation`): 委譲経由で起動された run は
+さらに `delegate-run` を呼べない (`numadora-language-spec.md` 9.6.1, 6.5.3)。
+`peer.relay` 能力は denied by default で、これも再帰委譲禁止と整合する。
+
 ## Resource Namespace
 
 The peer protocol should include namespace operations in addition to delegated
@@ -367,7 +406,7 @@ V1 deployment rules:
   "protocolVersion": 1,
   "peerId": "peer_7K4M2Q",
   "displayName": "workstation",
-  "serverVersion": "0.2.5",
+  "serverVersion": "0.3.0",
   "publicKey": "base64-public-key",
   "features": [
     "capability-negotiation",

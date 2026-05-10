@@ -121,7 +121,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         await WriteNumadoraStubModulesAsync(scripts);
         await File.WriteAllTextAsync(Path.Combine(scripts, "capabilities.numa"),
             """
-            IMPORT slasher_app AS app
+            IMPORT slasher_desktop AS desktop
             IMPORT slasher_window AS win
             IMPORT slasher_input AS input
             IMPORT slasher_screen AS screen
@@ -133,9 +133,9 @@ public sealed class ScriptRunServiceTests : IDisposable
 
             FUNC main()
                 io.Step("open notepad")
-                LET handle := app.Start("notepad.exe")
-                LET title := win.WaitForTitle("Notepad", 10000)
-                win.Focus(handle)
+                LET appRef := desktop.StartApp("notepad.exe")
+                LET windowRef := appRef.WaitForWindow("Notepad", 10000)
+                windowRef.Focus()
                 input.Text("hello")
                 input.Keys("CTRL+S")
                 input.Mouse("move", 1, 1, "left")
@@ -143,6 +143,9 @@ public sealed class ScriptRunServiceTests : IDisposable
                 input.Drag(1, 1, 2, 2, "left", 1, 1)
                 input.ContextMenu(1, 1, 1)
                 screen.Capture("full", 320, 180)
+                windowRef.Capture(320, 180)
+                windowRef.Close()
+                screen.CaptureMonitor(0, 320, 180)
                 element.Exists("foreground", "Notepad", "-", -1, "contains", 8, 1)
                 element.Find("foreground", "Notepad", "-", -1, "contains", 8, 20)
                 element.ReadText("foreground", "Notepad", "-", -1, "contains", 8, 1)
@@ -157,7 +160,8 @@ public sealed class ScriptRunServiceTests : IDisposable
                 browser.Links("-")
                 browser.Windows("-")
                 dialog.Message("hello", "Slasher")
-                test.AssertForegroundTitle("contains", title)
+                appRef.Close()
+                test.AssertForegroundTitle("contains", "Notepad")
             END
             """);
 
@@ -171,6 +175,21 @@ public sealed class ScriptRunServiceTests : IDisposable
             item.Module == "slasher_app"
             && item.Function == "Start"
             && item.CapabilityClass == "Process/app"
+            && item.Profile == "interactive");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_app"
+            && item.Function == "Close"
+            && item.CapabilityClass == "Process/app"
+            && item.Profile == "interactive");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_window"
+            && item.Function == "WaitForApp"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_window"
+            && item.Function == "Close"
+            && item.CapabilityClass == "User-input"
             && item.Profile == "interactive");
         Assert.Contains(capabilities, item =>
             item.Module == "slasher_input"
@@ -205,6 +224,16 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.Contains(capabilities, item =>
             item.Module == "slasher_screen"
             && item.Function == "Capture"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_screen"
+            && item.Function == "CaptureWindow"
+            && item.CapabilityClass == "Observe"
+            && item.Profile == "observe");
+        Assert.Contains(capabilities, item =>
+            item.Module == "slasher_screen"
+            && item.Function == "CaptureMonitor"
             && item.CapabilityClass == "Observe"
             && item.Profile == "observe");
         Assert.Contains(capabilities, item =>
@@ -807,7 +836,7 @@ public sealed class ScriptRunServiceTests : IDisposable
             IMPORT slasher_window AS win
 
             FUNC main()
-                win.Focus(1)
+                win.Focus("window:0x1")
             END
             """);
 
@@ -830,7 +859,7 @@ public sealed class ScriptRunServiceTests : IDisposable
         Assert.Equal("slasher-window", hostCallEvent.Parameters["executedBy"]);
         var policyInput = Assert.IsType<NumadoraPolicyInput>(hostCallEvent.Parameters["policyInput"]);
         Assert.NotNull(policyInput.Target);
-        Assert.Equal("1", policyInput.Target!.Handle);
+        Assert.Equal("0x1", policyInput.Target!.Handle);
         var policyDecision = Assert.IsType<NumadoraPolicyDecision>(hostCallEvent.Parameters["policyDecision"]);
         Assert.True(policyDecision.Allow);
         Assert.Equal("numadora_policy_allowed_window_focus", policyDecision.Code);
@@ -874,26 +903,99 @@ public sealed class ScriptRunServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(directory, "slasher_app.numa"),
             """
             MODULE slasher_app
-                EXPORT Start
+                EXPORT Start, Close
 
-                FUNC Start(fileName: String) -> Int
+                FUNC Start(fileName: String) -> String
                     Print("__SLASHER_HOST_CALL__ slasher_app.Start " + fileName)
-                    RETURN 1
+                    RETURN "app:last"
+                END
+
+                FUNC Close(appRef: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_app.Close " + appRef)
+                END
+            END
+            """);
+        await File.WriteAllTextAsync(Path.Combine(directory, "slasher_desktop.numa"),
+            """
+            MODULE slasher_desktop
+                EXPORT AppRef, WindowRef, StartApp, WaitForWindow, Close, Focus, State, Maximize, Minimize, Restore, Capture
+
+                RECORD AppRef
+                    id: String
+                END
+
+                RECORD WindowRef
+                    id: String
+                END
+
+                FUNC StartApp(fileName: String) -> AppRef
+                    Print("__SLASHER_HOST_CALL__ slasher_app.Start " + fileName)
+                    RETURN AppRef { id: "app:last" }
+                END
+
+                FUNC (appRef: AppRef) WaitForWindow(title: String, timeoutMs: Int) -> WindowRef
+                    Print("__SLASHER_HOST_CALL__ slasher_window.WaitForApp " + appRef.id + " " + title + " " + ToString(timeoutMs))
+                    RETURN WindowRef { id: "window:last" }
+                END
+
+                FUNC (appRef: AppRef) Close()
+                    Print("__SLASHER_HOST_CALL__ slasher_app.Close " + appRef.id)
+                END
+
+                FUNC (windowRef: WindowRef) Focus()
+                    Print("__SLASHER_HOST_CALL__ slasher_window.Focus " + windowRef.id)
+                END
+
+                FUNC (windowRef: WindowRef) State(state: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_window.State " + windowRef.id + " " + state)
+                END
+
+                FUNC (windowRef: WindowRef) Maximize()
+                    windowRef.State("maximize")
+                END
+
+                FUNC (windowRef: WindowRef) Minimize()
+                    windowRef.State("minimize")
+                END
+
+                FUNC (windowRef: WindowRef) Restore()
+                    windowRef.State("restore")
+                END
+
+                FUNC (windowRef: WindowRef) Close()
+                    Print("__SLASHER_HOST_CALL__ slasher_window.Close " + windowRef.id)
+                END
+
+                FUNC (windowRef: WindowRef) Capture(maxWidth: Int, maxHeight: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_screen.CaptureWindow " + windowRef.id + " " + ToString(maxWidth) + " " + ToString(maxHeight))
                 END
             END
             """);
         await File.WriteAllTextAsync(Path.Combine(directory, "slasher_window.numa"),
             """
             MODULE slasher_window
-                EXPORT WaitForTitle, Focus
+                EXPORT WaitForTitle, WaitForApp, Focus, State, Close
 
                 FUNC WaitForTitle(title: String, timeoutMs: Int) -> String
                     Print("__SLASHER_HOST_CALL__ slasher_window.WaitForTitle " + title + " " + ToString(timeoutMs))
-                    RETURN title
+                    RETURN "window:last"
                 END
 
-                FUNC Focus(handle: Int)
-                    Print("__SLASHER_HOST_CALL__ slasher_window.Focus " + ToString(handle))
+                FUNC WaitForApp(appRef: String, title: String, timeoutMs: Int) -> String
+                    Print("__SLASHER_HOST_CALL__ slasher_window.WaitForApp " + appRef + " " + title + " " + ToString(timeoutMs))
+                    RETURN "window:last"
+                END
+
+                FUNC Focus(target: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_window.Focus " + target)
+                END
+
+                FUNC State(target: String, state: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_window.State " + target + " " + state)
+                END
+
+                FUNC Close(target: String)
+                    Print("__SLASHER_HOST_CALL__ slasher_window.Close " + target)
                 END
             END
             """);
@@ -930,10 +1032,18 @@ public sealed class ScriptRunServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(directory, "slasher_screen.numa"),
             """
             MODULE slasher_screen
-                EXPORT Capture
+                EXPORT Capture, CaptureWindow, CaptureMonitor
 
                 FUNC Capture(scope: String, maxWidth: Int, maxHeight: Int)
                     Print("__SLASHER_HOST_CALL__ slasher_screen.Capture " + scope + " " + ToString(maxWidth) + " " + ToString(maxHeight))
+                END
+
+                FUNC CaptureWindow(target: String, maxWidth: Int, maxHeight: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_screen.CaptureWindow " + target + " " + ToString(maxWidth) + " " + ToString(maxHeight))
+                END
+
+                FUNC CaptureMonitor(screenIndex: Int, maxWidth: Int, maxHeight: Int)
+                    Print("__SLASHER_HOST_CALL__ slasher_screen.CaptureMonitor " + ToString(screenIndex) + " " + ToString(maxWidth) + " " + ToString(maxHeight))
                 END
             END
             """);

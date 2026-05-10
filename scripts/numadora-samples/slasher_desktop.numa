@@ -1,0 +1,53 @@
+MODULE slasher_desktop
+    EXPORT AppRef, WindowRef, StartApp, WaitForWindow, Close, Focus, State, Maximize, Minimize, Restore, Capture
+
+    RECORD AppRef
+        id: String
+    END
+
+    RECORD WindowRef
+        id: String
+    END
+
+    FUNC StartApp(fileName: String) -> AppRef
+        Print("__SLASHER_HOST_CALL__ slasher_app.Start " + fileName)
+        RETURN AppRef { id: "app:last" }
+    END
+
+    FUNC (appRef: AppRef) WaitForWindow(title: String, timeoutMs: Int) -> WindowRef
+        Print("__SLASHER_HOST_CALL__ slasher_window.WaitForApp " + appRef.id + " " + title + " " + ToString(timeoutMs))
+        RETURN WindowRef { id: "window:last" }
+    END
+
+    FUNC (appRef: AppRef) Close()
+        Print("__SLASHER_HOST_CALL__ slasher_app.Close " + appRef.id)
+    END
+
+    FUNC (windowRef: WindowRef) Focus()
+        Print("__SLASHER_HOST_CALL__ slasher_window.Focus " + windowRef.id)
+    END
+
+    FUNC (windowRef: WindowRef) State(state: String)
+        Print("__SLASHER_HOST_CALL__ slasher_window.State " + windowRef.id + " " + state)
+    END
+
+    FUNC (windowRef: WindowRef) Maximize()
+        windowRef.State("maximize")
+    END
+
+    FUNC (windowRef: WindowRef) Minimize()
+        windowRef.State("minimize")
+    END
+
+    FUNC (windowRef: WindowRef) Restore()
+        windowRef.State("restore")
+    END
+
+    FUNC (windowRef: WindowRef) Close()
+        Print("__SLASHER_HOST_CALL__ slasher_window.Close " + windowRef.id)
+    END
+
+    FUNC (windowRef: WindowRef) Capture(maxWidth: Int, maxHeight: Int)
+        Print("__SLASHER_HOST_CALL__ slasher_screen.CaptureWindow " + windowRef.id + " " + ToString(maxWidth) + " " + ToString(maxHeight))
+    END
+END

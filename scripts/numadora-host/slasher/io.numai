@@ -1,0 +1,23 @@
+# Slasher run logging and step markers.
+# Slasher built-in (always available).
+
+MODULE slasher/io
+
+--- 人間 / AI 可読な 1 行ステップを run timeline に記録する (step イベント)。
+--- スクリプトの「いま何をやっているか」を読み下すための主要マーカ。
+EXPORT EFFECT(observe) FUNC step(name: string): unit
+
+--- 任意の文字列を run timeline に numadora.log として記録する (severity: info)。
+EXPORT EFFECT(observe) FUNC log(message: string): unit
+
+--- 警告レベルでログ。
+EXPORT EFFECT(observe) FUNC warn(message: string): unit
+
+--- エラー レベルでログ。
+EXPORT EFFECT(observe) FUNC error(message: string): unit
+
+--- 文字列を 1 行出力 (std/io.print と同様だが Slasher 証跡モデルに記録される)。
+EXPORT EFFECT(observe) FUNC print(message: string): unit
+
+--- 指定ミリ秒だけ待機 (ブロッキング)。
+EXPORT EFFECT(system-info) FUNC wait(ms: int): unit

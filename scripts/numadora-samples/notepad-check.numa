@@ -1,17 +1,26 @@
-IMPORT slasher_app AS app
-IMPORT slasher_window AS win
-IMPORT slasher_input AS input
-IMPORT slasher_io AS io
-IMPORT slasher_test AS test
+# Slasher v0.2 smoke test: launch Notepad, type text, assert title.
+#
+# Requires Numadora v0.2 parser (Lang PR-C) and AppOps plugin host (PR-D, PR-E).
+# Run prerequisite: allowInteractiveInput = true (input.text is INTERACTIVE).
 
-FUNC main()
-    io.Step("open notepad")
-    LET handle := app.Start("notepad.exe")
+MODULE notepad-check
+REQUIRES (process-app, user-input, observe)
 
-    LET title := win.WaitForTitle("Notepad", 10000)
-    win.Focus(handle)
+IMPORT slasher/app AS app
+IMPORT slasher/input AS input
+IMPORT slasher/io AS io
+IMPORT slasher/test AS test
 
-    io.Step("type text")
-    input.Text("Slasher Numadora smoke")
-    test.AssertForegroundTitle("contains", title)
+EXPORT FUNC main()
+  io.step("open notepad")
+  LET ref = app.start-app("notepad.exe")
+
+  LET win = ref.wait-for-window("Notepad", 10000)
+              OR FAIL "Notepad window did not appear within 10s"
+              CODE "window_not_found"
+  win.focus()
+
+  io.step("type text")
+  input.text("Slasher Numadora smoke")
+  test.assert-foreground-title("contains", "Notepad")
 END

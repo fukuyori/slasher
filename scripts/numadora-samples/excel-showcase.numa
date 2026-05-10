@@ -1,0 +1,33 @@
+# Slasher v0.2 Excel showcase: open workbook, maximize, capture, close.
+#
+# Requires Numadora v0.2 parser (Lang PR-C), AppOps plugin host (PR-D, PR-E),
+# and a workbook at artifacts/demo/workbook-app.xlsx.
+# Run prerequisite: allowInteractiveInput = true.
+
+MODULE excel-showcase
+REQUIRES (process-app, user-input, observe, system-info)
+
+IMPORT slasher/app AS app
+IMPORT slasher/io AS io
+
+EXPORT FUNC main()
+  io.step("open workbook")
+  LET excel = app.start-app(r"artifacts\demo\workbook-app.xlsx")
+
+  io.step("wait for workbook window")
+  LET workbook = excel.wait-for-window("workbook-app", 20000)
+                   OR FAIL "workbook window did not appear within 20s"
+                   CODE "workbook_not_found"
+                   DETAILS { expected-title: "workbook-app" }
+
+  io.step("maximize workbook")
+  workbook.maximize()
+  io.wait(800)
+
+  io.step("capture workbook")
+  workbook.capture(1440, 810)
+  io.wait(5000)
+
+  io.step("close Excel")
+  excel.close()
+END

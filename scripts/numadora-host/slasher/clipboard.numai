@@ -1,0 +1,16 @@
+# Slasher clipboard operations.
+# Provided by Io layer hosting (TBD: standalone plugin or Slasher built-in).
+
+MODULE slasher/clipboard
+
+--- クリップボードの現在のテキストを取得。何もなければ None。
+EXPORT EFFECT(clipboard) FUNC read-text(): Option[string]
+
+--- クリップボードにテキストを書き込む。
+EXPORT INTERACTIVE EFFECT(clipboard) FUNC write-text(content: string): unit
+
+--- クリップボードを空にする。
+EXPORT INTERACTIVE EFFECT(clipboard) FUNC clear(): unit
+
+--- クリップボードに何らかのデータがあるか。
+EXPORT EFFECT(observe) FUNC has-content(): bool

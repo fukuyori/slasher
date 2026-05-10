@@ -1,0 +1,99 @@
+# Slasher file system operations.
+# Provided by Io layer hosting.
+# Destructive operations (delete, overwrite) require allowDestructive at run time.
+
+MODULE slasher/files
+
+--- ファイル / フォルダの観測情報。
+EXPORT RECORD FileInfo {
+  --- 絶対パス。
+  path: string,
+  --- ファイル名 (パス除く)。
+  name: string,
+  --- 拡張子 ("." 含まず)。
+  extension: string,
+  --- バイト サイズ (ディレクトリは 0)。
+  size: int,
+  --- 最終更新時刻 (Unix ms)。
+  modified-ms: int,
+  --- ディレクトリか。
+  is-directory: bool,
+  --- 隠しか。
+  is-hidden: bool,
+}
+
+--- ディレクトリ列挙結果。
+EXPORT RECORD DirectoryListing {
+  files: array[FileInfo],
+  directories: array[FileInfo],
+}
+
+--- ファイル ウォッチ イベント。
+EXPORT RECORD FileWatchEvent {
+  --- "created" | "changed" | "deleted" | "renamed"。
+  kind: string,
+  --- イベントの対象パス。
+  path: string,
+  --- renamed の場合の旧パス。
+  old-path: Option[string],
+  --- 発生時刻 (Unix ms)。
+  timestamp-ms: int,
+}
+
+--- ファイル ウォッチャ参照。
+EXPORT OPAQUE TYPE WatcherRef
+
+# --- 観測 ---
+
+--- パスの存在確認。
+EXPORT EFFECT(file-read) FUNC exists(path: string): bool
+
+--- ファイル / ディレクトリ情報を取得。存在しなければ None。
+EXPORT EFFECT(file-read) FUNC info(path: string): Option[FileInfo]
+
+--- ディレクトリの中身を 1 階層列挙。
+EXPORT EFFECT(file-read) FUNC list(path: string): DirectoryListing
+
+# --- 読み書き ---
+
+--- テキスト ファイルを UTF-8 で読み込む。
+EXPORT EFFECT(file-read) FUNC read-text(path: string): string
+
+--- テキストを上書き保存 (overwrite を伴うので allowDestructive 必要)。
+EXPORT EFFECT(file-write, destructive) FUNC write-text(path: string, content: string, allow-destructive: bool): unit
+
+--- テキストを末尾追記 (新規作成なら作る)。
+EXPORT EFFECT(file-write) FUNC append-text(path: string, content: string): unit
+
+--- バイト列をファイルから読み込む (base64 で返す)。
+EXPORT EFFECT(file-read) FUNC read-bytes(path: string): string
+
+--- バイト列 (base64) をファイルに書く。
+EXPORT EFFECT(file-write, destructive) FUNC write-bytes(path: string, content-base64: string, allow-destructive: bool): unit
+
+# --- 操作 ---
+
+--- ディレクトリを再帰的に作る (既存なら no-op)。
+EXPORT EFFECT(file-write) FUNC create-directory(path: string): unit
+
+--- ファイルをコピー。target が既存なら allow-destructive 必要。
+EXPORT EFFECT(file-write, destructive) FUNC copy(source: string, target: string, allow-destructive: bool): unit
+
+--- ファイル / ディレクトリを移動。
+EXPORT EFFECT(file-write, destructive) FUNC move(source: string, target: string, allow-destructive: bool): unit
+
+--- ファイル / ディレクトリを削除 (再帰)。allow-destructive 必須。
+--- dry-run=true なら削除は行わず、削除予定パスのリストを返す。
+EXPORT EFFECT(file-write, destructive) FUNC delete(path: string, allow-destructive: bool, dry-run: bool): array[string]
+
+# --- ウォッチ ---
+
+--- ファイル / ディレクトリの変更を監視するウォッチャを起動。
+--- filter は glob (例: "*.csv")、空なら全て。
+EXPORT EFFECT(file-read) FUNC watch(path: string, filter: string, recursive: bool): WatcherRef
+
+--- ウォッチャに溜まったイベントを取得 (取得後はキューから消える)。
+EXPORT EFFECT(file-read) FUNC poll-events(watcher: WatcherRef): array[FileWatchEvent]
+
+--- ウォッチャを停止する。
+EXPORT EFFECT(observe) FUNC stop-watch(watcher: WatcherRef): unit

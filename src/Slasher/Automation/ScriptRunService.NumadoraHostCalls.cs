@@ -8,6 +8,7 @@ public sealed partial class ScriptRunService
         NumadoraHostCall hostCall,
         NumadoraPolicyInput policyInput,
         NumadoraPolicyDecision policyDecision,
+        NumadoraHostReferenceState references,
         CancellationToken cancellationToken)
     {
         if (!policyDecision.Allow)
@@ -61,18 +62,77 @@ public sealed partial class ScriptRunService
                     actual: new { exists = false });
             }
 
+            var target = references.RegisterWindow(window);
             return NumadoraLocalHostCallResult.Passed(
                 new
                 {
                     observed = true,
                     title = window.Title,
                     handle = window.Handle,
+                    windowRef = NumadoraHostReferenceState.LastWindowRef,
                     timeoutMs,
                     executedBy = "slasher-window",
                     policyAllowed = true,
                     policyCode = policyDecision.Code
                 },
-                ToTarget(window),
+                target,
+                "slasher-window");
+        }
+
+        if (hostCall.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("WaitForApp", StringComparison.OrdinalIgnoreCase))
+        {
+            var waitForApp = ParseNumadoraWaitForAppArgs(hostCall.Arguments);
+            if (waitForApp is null)
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_host_call_invalid_arguments",
+                    "slasher_window.WaitForApp requires appRef, title, and timeoutMs.",
+                    executedBy: "slasher-window");
+            }
+
+            if (!references.TryGetApp(waitForApp.Value.AppRef, out var appRef))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_reference_not_found",
+                    $"Application reference '{waitForApp.Value.AppRef}' was not found.",
+                    executedBy: "slasher-window",
+                    expected: new { appRef = waitForApp.Value.AppRef },
+                    actual: new { exists = false });
+            }
+
+            var window = await _automation.WaitForWindowAsync(
+                new WindowQueryRequest(
+                    waitForApp.Value.Title,
+                    ProcessId: appRef.ProcessId,
+                    ProcessName: appRef.ProcessName,
+                    TimeoutMs: waitForApp.Value.TimeoutMs),
+                cancellationToken);
+            if (window is null)
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "window_not_found",
+                    $"No window for app reference '{waitForApp.Value.AppRef}' containing '{waitForApp.Value.Title}' was found before the timeout.",
+                    executedBy: "slasher-window",
+                    expected: new { exists = true, waitForApp.Value.AppRef, waitForApp.Value.Title, waitForApp.Value.TimeoutMs },
+                    actual: new { exists = false });
+            }
+
+            var target = references.RegisterWindow(window);
+            return NumadoraLocalHostCallResult.Passed(
+                new
+                {
+                    observed = true,
+                    appRef = waitForApp.Value.AppRef,
+                    windowRef = NumadoraHostReferenceState.LastWindowRef,
+                    title = window.Title,
+                    handle = window.Handle,
+                    timeoutMs = waitForApp.Value.TimeoutMs,
+                    executedBy = "slasher-window",
+                    policyAllowed = true,
+                    policyCode = policyDecision.Code
+                },
+                target,
                 "slasher-window");
         }
 
@@ -90,25 +150,26 @@ public sealed partial class ScriptRunService
 
             try
             {
-                var result = _automation.StartApp(new StartAppRequest(fileName));
-                var target = result.MainWindowHandle is null
+                var resolvedFileName = ResolveNumadoraLocalPathArgument(fileName);
+                var result = _automation.StartApp(new StartAppRequest(resolvedFileName));
+                var appRef = references.RegisterApp(result, fileName, resolvedFileName);
+                var target = string.IsNullOrWhiteSpace(result.MainWindowHandle)
                     ? null
-                    : new AutomationTarget(
-                        "window",
-                        result.MainWindowHandle,
-                        result.MainWindowTitle,
-                        ProcessId: result.ProcessId,
-                        ProcessName: result.ProcessName);
+                    : references.ResolveWindowTarget(NumadoraHostReferenceState.LastWindowRef);
+
                 return NumadoraLocalHostCallResult.Passed(
                     new
                     {
                         started = true,
+                        appRef = appRef.Ref,
+                        windowRef = target is null ? null : NumadoraHostReferenceState.LastWindowRef,
                         fileName,
                         result.ProcessId,
                         result.ProcessName,
                         result.MainWindowHandle,
                         result.MainWindowTitle,
                         executedBy = "slasher-app",
+                        resolvedFileName,
                         policyAllowed = true,
                         policyCode = policyDecision.Code
                     },
@@ -126,19 +187,78 @@ public sealed partial class ScriptRunService
             }
         }
 
+        if (hostCall.Module.Equals("slasher_app", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("Close", StringComparison.OrdinalIgnoreCase))
+        {
+            var appRefToken = string.Join(' ', hostCall.Arguments).Trim();
+            if (string.IsNullOrWhiteSpace(appRefToken))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_host_call_invalid_arguments",
+                    "slasher_app.Close requires an application reference.",
+                    executedBy: "slasher-app");
+            }
+
+            if (!references.TryGetApp(appRefToken, out var appRef))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_reference_not_found",
+                    $"Application reference '{appRefToken}' was not found.",
+                    executedBy: "slasher-app",
+                    expected: new { appRef = appRefToken },
+                    actual: new { exists = false });
+            }
+
+            try
+            {
+                var closed = _automation.CloseProgram(new CloseProgramRequest(ProcessId: appRef.ProcessId));
+                var target = new AutomationTarget(
+                    "process",
+                    appRef.MainWindowHandle,
+                    appRef.MainWindowTitle,
+                    ProcessId: appRef.ProcessId,
+                    ProcessName: appRef.ProcessName);
+                return NumadoraLocalHostCallResult.Passed(
+                    new
+                    {
+                        closed = closed > 0,
+                        appRef = appRefToken,
+                        appRef.ProcessId,
+                        appRef.ProcessName,
+                        closedCount = closed,
+                        executedBy = "slasher-app",
+                        policyAllowed = true,
+                        policyCode = policyDecision.Code
+                    },
+                    target,
+                    "slasher-app");
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or System.ComponentModel.Win32Exception)
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "app_close_failed",
+                    ex.Message,
+                    executedBy: "slasher-app",
+                    expected: new { closed = true, appRef = appRefToken },
+                    actual: new { closed = false, error = ex.GetType().Name });
+            }
+        }
+
         if (hostCall.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
             && hostCall.Function.Equals("Focus", StringComparison.OrdinalIgnoreCase))
         {
-            var handle = string.Join(' ', hostCall.Arguments).Trim();
+            var reference = string.Join(' ', hostCall.Arguments).Trim();
+            var target = references.ResolveWindowTarget(reference)
+                ?? (string.IsNullOrWhiteSpace(reference) ? null : new AutomationTarget("window", Handle: reference));
+            var handle = target?.Handle;
             if (string.IsNullOrWhiteSpace(handle))
             {
                 return NumadoraLocalHostCallResult.Failed(
                     "numadora_host_call_invalid_arguments",
-                    "slasher_window.Focus requires a window handle.",
+                    "slasher_window.Focus requires a window handle or window reference.",
                     executedBy: "slasher-window");
             }
 
-            var target = new AutomationTarget("window", Handle: handle);
             if (!_automation.FocusWindow(handle, out var error))
             {
                 return NumadoraLocalHostCallResult.Failed(
@@ -161,6 +281,96 @@ public sealed partial class ScriptRunService
                     policyCode = policyDecision.Code
                 },
                 refreshed,
+                "slasher-window");
+        }
+
+        if (hostCall.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("State", StringComparison.OrdinalIgnoreCase))
+        {
+            var (targetToken, state) = ParseNumadoraOptionalWindowRefAndValue(hostCall.Arguments);
+            if (string.IsNullOrWhiteSpace(state))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_host_call_invalid_arguments",
+                    "slasher_window.State requires a state.",
+                    executedBy: "slasher-window",
+                    target: policyInput.Target);
+            }
+
+            var target = references.ResolveWindowTarget(targetToken) ?? policyInput.Target;
+            var handle = target?.Handle;
+            if (string.IsNullOrWhiteSpace(handle))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_policy_missing_target",
+                    "slasher_window.State requires an observable target handle.",
+                    executedBy: "slasher-window",
+                    target: target);
+            }
+
+            if (!_automation.SetWindowState(handle, new WindowStateRequest(state), out var error))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    error?.Code ?? "window_state_failed",
+                    error?.Message ?? "Failed to change the target window state.",
+                    executedBy: "slasher-window",
+                    target: target,
+                    expected: new { state },
+                    actual: new { changed = false });
+            }
+
+            var refreshed = _automation.TryGetWindow(handle, out var window) ? ToTarget(window) : target;
+            references.RegisterWindow(refreshed!);
+            return NumadoraLocalHostCallResult.Passed(
+                new
+                {
+                    changed = true,
+                    windowRef = targetToken,
+                    state,
+                    executedBy = "slasher-window",
+                    policyAllowed = true,
+                    policyCode = policyDecision.Code
+                },
+                refreshed,
+                "slasher-window");
+        }
+
+        if (hostCall.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("Close", StringComparison.OrdinalIgnoreCase))
+        {
+            var targetToken = SplitNumadoraArgs(hostCall.Arguments).FirstOrDefault();
+            var target = references.ResolveWindowTarget(targetToken) ?? policyInput.Target;
+            var handle = target?.Handle;
+            if (string.IsNullOrWhiteSpace(handle))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_policy_missing_target",
+                    "slasher_window.Close requires an observable target handle.",
+                    executedBy: "slasher-window",
+                    target: target);
+            }
+
+            if (!_automation.CloseWindow(handle, out var error))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    error?.Code ?? "window_close_failed",
+                    error?.Message ?? "Failed to close the target window.",
+                    executedBy: "slasher-window",
+                    target: target,
+                    expected: new { closed = true },
+                    actual: new { closed = false });
+            }
+
+            return NumadoraLocalHostCallResult.Passed(
+                new
+                {
+                    closed = true,
+                    handle,
+                    executedBy = "slasher-window",
+                    policyAllowed = true,
+                    policyCode = policyDecision.Code
+                },
+                target,
                 "slasher-window");
         }
 
@@ -550,6 +760,112 @@ public sealed partial class ScriptRunService
                 screenshot);
         }
 
+        if (hostCall.Module.Equals("slasher_screen", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("CaptureMonitor", StringComparison.OrdinalIgnoreCase))
+        {
+            var capture = ParseNumadoraMonitorCaptureArgs(hostCall.Arguments);
+            if (capture is null)
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_host_call_invalid_arguments",
+                    "slasher_screen.CaptureMonitor requires screenIndex, maxWidth, and maxHeight.",
+                    executedBy: "slasher-screen");
+            }
+
+            if (!_automation.TakeScreenshot(
+                new ScreenshotRequest(
+                    ScreenIndex: capture.Value.ScreenIndex,
+                    MaxWidth: capture.Value.MaxWidth <= 0 ? null : capture.Value.MaxWidth,
+                    MaxHeight: capture.Value.MaxHeight <= 0 ? null : capture.Value.MaxHeight),
+                out var screenshot,
+                out var error)
+                || screenshot is null)
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    error?.Code ?? "capture_failed",
+                    error?.Message ?? "Failed to capture the monitor.",
+                    executedBy: "slasher-screen",
+                    expected: new { captured = true, capture.Value.ScreenIndex, capture.Value.MaxWidth, capture.Value.MaxHeight },
+                    actual: new { captured = false });
+            }
+
+            return NumadoraLocalHostCallResult.Passed(
+                new
+                {
+                    captured = true,
+                    scope = "monitor",
+                    capture.Value.ScreenIndex,
+                    screenshot.MimeType,
+                    screenshot.Width,
+                    screenshot.Height,
+                    executedBy = "slasher-screen",
+                    policyAllowed = true,
+                    policyCode = policyDecision.Code
+                },
+                policyInput.Target,
+                "slasher-screen",
+                screenshot);
+        }
+
+        if (hostCall.Module.Equals("slasher_screen", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("CaptureWindow", StringComparison.OrdinalIgnoreCase))
+        {
+            var capture = ParseNumadoraWindowCaptureArgs(hostCall.Arguments);
+            if (capture is null)
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_host_call_invalid_arguments",
+                    "slasher_screen.CaptureWindow requires windowRef, maxWidth, and maxHeight.",
+                    executedBy: "slasher-screen");
+            }
+
+            var target = references.ResolveWindowTarget(capture.Value.WindowRef) ?? policyInput.Target;
+            var handle = target?.Handle;
+            if (string.IsNullOrWhiteSpace(handle))
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    "numadora_policy_missing_target",
+                    "slasher_screen.CaptureWindow requires an observable target handle.",
+                    executedBy: "slasher-screen",
+                    target: target);
+            }
+
+            if (!_automation.TakeScreenshot(
+                new ScreenshotRequest(
+                    handle,
+                    MaxWidth: capture.Value.MaxWidth <= 0 ? null : capture.Value.MaxWidth,
+                    MaxHeight: capture.Value.MaxHeight <= 0 ? null : capture.Value.MaxHeight),
+                out var screenshot,
+                out var error)
+                || screenshot is null)
+            {
+                return NumadoraLocalHostCallResult.Failed(
+                    error?.Code ?? "capture_failed",
+                    error?.Message ?? "Failed to capture the target window.",
+                    executedBy: "slasher-screen",
+                    target: target,
+                    expected: new { captured = true, capture.Value.WindowRef, capture.Value.MaxWidth, capture.Value.MaxHeight },
+                    actual: new { captured = false });
+            }
+
+            return NumadoraLocalHostCallResult.Passed(
+                new
+                {
+                    captured = true,
+                    scope = "window",
+                    windowRef = capture.Value.WindowRef,
+                    screenshot.MimeType,
+                    screenshot.Width,
+                    screenshot.Height,
+                    executedBy = "slasher-screen",
+                    policyAllowed = true,
+                    policyCode = policyDecision.Code
+                },
+                target,
+                "slasher-screen",
+                screenshot);
+        }
+
         if (hostCall.Module.Equals("slasher_element", StringComparison.OrdinalIgnoreCase)
             && hostCall.Function.Equals("Tree", StringComparison.OrdinalIgnoreCase))
         {
@@ -769,6 +1085,23 @@ public sealed partial class ScriptRunService
             "numadora_host_call_not_enabled",
             $"Host call '{hostCall.Module}.{hostCall.Function}' is not enabled for local execution.",
             executedBy: "slasher-host");
+    }
+
+    private string ResolveNumadoraLocalPathArgument(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || Path.IsPathRooted(value) || LooksLikeUri(value))
+        {
+            return value;
+        }
+
+        return Path.GetFullPath(Path.Combine(_workspaceRoot, value));
+    }
+
+    private static bool LooksLikeUri(string value)
+    {
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && !string.IsNullOrWhiteSpace(uri.Scheme)
+            && uri.Scheme.Length > 1;
     }
 
     private NumadoraLocalHostCallResult? ExecuteNumadoraBrowserObserveCall(
@@ -1024,6 +1357,65 @@ public sealed partial class ScriptRunService
         return new NumadoraCaptureArgs(tokens[0].ToLowerInvariant(), maxWidth, maxHeight);
     }
 
+    private static NumadoraMonitorCaptureArgs? ParseNumadoraMonitorCaptureArgs(IReadOnlyList<string> args)
+    {
+        var tokens = string.Join(' ', args)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (tokens.Length < 3
+            || !int.TryParse(tokens[0], out var screenIndex)
+            || !int.TryParse(tokens[1], out var maxWidth)
+            || !int.TryParse(tokens[2], out var maxHeight)
+            || screenIndex < 0)
+        {
+            return null;
+        }
+
+        return new NumadoraMonitorCaptureArgs(screenIndex, maxWidth, maxHeight);
+    }
+
+    private static NumadoraWindowCaptureArgs? ParseNumadoraWindowCaptureArgs(IReadOnlyList<string> args)
+    {
+        var tokens = SplitNumadoraArgs(args);
+        if (tokens.Length < 3
+            || !int.TryParse(tokens[1], out var maxWidth)
+            || !int.TryParse(tokens[2], out var maxHeight))
+        {
+            return null;
+        }
+
+        return new NumadoraWindowCaptureArgs(tokens[0], maxWidth, maxHeight);
+    }
+
+    private static NumadoraWaitForAppArgs? ParseNumadoraWaitForAppArgs(IReadOnlyList<string> args)
+    {
+        var tokens = SplitNumadoraArgs(args);
+        if (tokens.Length < 3 || !int.TryParse(tokens[^1], out var timeoutMs))
+        {
+            return null;
+        }
+
+        var title = string.Join(' ', tokens.Skip(1).Take(tokens.Length - 2)).Trim();
+        return string.IsNullOrWhiteSpace(tokens[0]) || string.IsNullOrWhiteSpace(title)
+            ? null
+            : new NumadoraWaitForAppArgs(tokens[0], title, Math.Max(1, timeoutMs));
+    }
+
+    private static (string? WindowRef, string Value) ParseNumadoraOptionalWindowRefAndValue(IReadOnlyList<string> args)
+    {
+        var tokens = SplitNumadoraArgs(args);
+        if (tokens.Length >= 2 && IsNumadoraWindowReference(tokens[0]))
+        {
+            return (tokens[0], string.Join(' ', tokens.Skip(1)).Trim());
+        }
+
+        return (null, string.Join(' ', args).Trim());
+    }
+
+    private static bool IsNumadoraWindowReference(string value)
+    {
+        return NumadoraHostReferenceState.LooksLikeWindowReference(value);
+    }
+
     private static NumadoraElementTreeArgs? ParseNumadoraElementTreeArgs(IReadOnlyList<string> args)
     {
         var tokens = SplitNumadoraArgs(args);
@@ -1235,6 +1627,12 @@ public sealed partial class ScriptRunService
     private readonly record struct NumadoraContextMenuArgs(int X, int Y, int DelayMs);
 
     private readonly record struct NumadoraCaptureArgs(string Scope, int MaxWidth, int MaxHeight);
+
+    private readonly record struct NumadoraMonitorCaptureArgs(int ScreenIndex, int MaxWidth, int MaxHeight);
+
+    private readonly record struct NumadoraWindowCaptureArgs(string WindowRef, int MaxWidth, int MaxHeight);
+
+    private readonly record struct NumadoraWaitForAppArgs(string AppRef, string Title, int TimeoutMs);
 
     private readonly record struct NumadoraElementTreeArgs(string Scope, int MaxDepth, int MaxChildren);
 

@@ -1,0 +1,94 @@
+# Slasher browser automation (Selenium WebDriver).
+# Provided by Browser plugin (cross-platform: Edge, Chrome, Firefox).
+
+MODULE slasher/browser
+
+--- ブラウザ セッションへの不透明参照。
+EXPORT OPAQUE TYPE BrowserSession
+
+--- 対応ブラウザ種別。
+EXPORT TYPE BrowserName = "edge" | "chrome" | "firefox"
+
+--- DOM 要素ロケータ種別 (Selenium 由来)。
+EXPORT TYPE LocatorKind = "css" | "xpath" | "id" | "name" | "tag" | "class" | "link-text" | "partial-link-text"
+
+--- ブラウザ ウィンドウ情報。
+EXPORT RECORD BrowserWindowInfo {
+  --- WebDriver の window handle。
+  handle: string,
+  --- タイトル。
+  title: string,
+  --- URL。
+  url: string,
+}
+
+--- 要素属性の取得結果。
+EXPORT RECORD AttributeValue {
+  --- 取得できたか。
+  found: bool,
+  --- 値 (found=false なら "")。
+  value: string,
+}
+
+# --- セッション管理 ---
+
+--- 指定ブラウザを起動して session を返す。url が空ならホーム ページ。
+EXPORT INTERACTIVE EFFECT(process-app) FUNC open(name: BrowserName, url: string): BrowserSession
+
+--- session を閉じる。
+EXPORT INTERACTIVE EFFECT(process-app) FUNC close(session: BrowserSession): unit
+
+--- 現在の "default" session を取得 (open 後の最後のもの)。session-id 引数は識別文字列、"-" でデフォルト。
+EXPORT EFFECT(observe) FUNC current(session-id: string): Option[BrowserSession]
+
+# --- 観測 (副作用なしの "観測" として扱う、ただしネットワーク IO 必要なので EFFECT) ---
+
+--- ページ タイトル。
+EXPORT EFFECT(observe) FUNC title(session-id: string): string
+
+--- 現在の URL。
+EXPORT EFFECT(observe) FUNC url(session-id: string): string
+
+--- DOM 要素を検索 (Some なら見つかった、None なら timeout)。
+EXPORT EFFECT(observe) FUNC locate(using: LocatorKind, value: string, timeout-ms: int, session-id: string): Option[string]
+
+--- 要素のテキストを取得。
+EXPORT EFFECT(observe) FUNC dom-text(using: LocatorKind, value: string, timeout-ms: int, session-id: string): Option[string]
+
+--- 要素の属性を取得。
+EXPORT EFFECT(observe) FUNC attribute(using: LocatorKind, value: string, attr: string, timeout-ms: int, session-id: string): AttributeValue
+
+--- ページ全体のスクリーンショット (PNG base64)。
+EXPORT EFFECT(observe) FUNC screenshot(session-id: string): string
+
+--- ページ内の <a href> リンクを列挙。
+EXPORT EFFECT(observe) FUNC links(session-id: string): array[string]
+
+--- 開いている全ブラウザ ウィンドウを列挙。
+EXPORT EFFECT(observe) FUNC windows(session-id: string): array[BrowserWindowInfo]
+
+# --- 操作 (INTERACTIVE: ユーザ承認必須) ---
+
+--- ナビゲート。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC navigate(url: string, session-id: string): unit
+
+--- DOM 要素をクリック。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC click(using: LocatorKind, value: string, timeout-ms: int, session-id: string): unit
+
+--- DOM 要素にホバー。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC hover(using: LocatorKind, value: string, timeout-ms: int, session-id: string): unit
+
+--- DOM 要素にテキスト入力。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC type-text(using: LocatorKind, value: string, text: string, timeout-ms: int, session-id: string): unit
+
+--- DOM 要素にキー押下 (例: "ENTER", "TAB")。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC press(using: LocatorKind, value: string, key: string, timeout-ms: int, session-id: string): unit
+
+--- ファイル アップロード (input[type=file] 要素にファイル パス設定)。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC upload(using: LocatorKind, value: string, file-path: string, timeout-ms: int, session-id: string): unit
+
+--- セレクト要素のオプションを選択。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC select-option(using: LocatorKind, value: string, option: string, timeout-ms: int, session-id: string): unit
+
+--- 任意の JavaScript を実行 (戻り値は文字列化)。
+EXPORT INTERACTIVE EFFECT(user-input) FUNC execute-js(script: string, session-id: string): string

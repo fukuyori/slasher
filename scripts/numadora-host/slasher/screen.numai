@@ -1,0 +1,54 @@
+# Slasher screen capture and image observation.
+# Provided by WindowsNative plugin (Windows). Future: MacOSNative, LinuxNative.
+
+MODULE slasher/screen
+
+IMPORT slasher/window AS window
+
+--- ディスプレイ情報。
+EXPORT RECORD ScreenInfo {
+  --- screen index (0 ベース)。
+  index: int,
+  --- 表示名 (例: "DISPLAY1")。
+  name: string,
+  --- ディスプレイ全体の矩形。
+  x: int,
+  y: int,
+  width: int,
+  height: int,
+  --- プライマリ ディスプレイか。
+  is-primary: bool,
+}
+
+--- 画像マッチ結果。
+EXPORT RECORD ImageMatch {
+  --- マッチしたか。
+  matched: bool,
+  --- マッチ スコア (0.0 - 1.0)。
+  score: float,
+  --- マッチ位置 (matched=false なら 0)。
+  x: int,
+  y: int,
+  width: int,
+  height: int,
+}
+
+--- 接続されている全ディスプレイを列挙。
+EXPORT EFFECT(observe) FUNC enumerate(): array[ScreenInfo]
+
+--- 全ディスプレイを 1 枚にまとめてキャプチャ (BMP base64)。
+--- max-width / max-height は 0 でフルサイズ。
+EXPORT EFFECT(observe) FUNC capture-full(max-width: int, max-height: int): string
+
+--- 特定ディスプレイをキャプチャ。
+EXPORT EFFECT(observe) FUNC capture-monitor(screen-index: int, max-width: int, max-height: int): string
+
+--- 画面の任意領域をキャプチャ。
+EXPORT EFFECT(observe) FUNC capture-region(x: int, y: int, width: int, height: int): string
+
+--- ウィンドウ単体をキャプチャ。
+EXPORT EFFECT(observe) FUNC capture-window(target: window.WindowRef, max-width: int, max-height: int): string
+
+--- BMP テンプレート画像 (base64) を screenshot 内で検索。
+--- threshold は閾値スコア (0.0-1.0)。matched=true なら一致位置を返す。
+EXPORT EFFECT(observe) FUNC match-image(screenshot: string, template: string, threshold: float): ImageMatch

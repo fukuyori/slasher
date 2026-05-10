@@ -2,48 +2,65 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $Path,
 
-    [string] $NumadoraHome = $env:NUMADORA_HOME,
-
-    [string] $TargetDir = ""
+    [int] $Port = 5055
 )
 
 $ErrorActionPreference = "Stop"
 
-if ([string]::IsNullOrWhiteSpace($NumadoraHome)) {
-    $candidate = "D:\home\source\rust\Numadora"
-    if (Test-Path -LiteralPath $candidate) {
-        $NumadoraHome = $candidate
+function Ensure-SlasherServer {
+    $health = "http://127.0.0.1:$Port/health"
+    try {
+        Invoke-RestMethod -Uri $health -TimeoutSec 2 | Out-Null
+        return
+    } catch {
     }
-}
 
-if ([string]::IsNullOrWhiteSpace($NumadoraHome) -or -not (Test-Path -LiteralPath $NumadoraHome)) {
-    throw "Numadora home was not found. Set NUMADORA_HOME or pass -NumadoraHome."
-}
+    $project = Join-Path $PSScriptRoot "..\src\Slasher\Slasher.csproj"
+    $root = Resolve-Path (Join-Path $PSScriptRoot "..")
+    $arguments = @(
+        "run",
+        "--project", $project,
+        "--urls", "http://127.0.0.1:$Port"
+    )
 
-$manifest = Join-Path $NumadoraHome "Cargo.toml"
-if (-not (Test-Path -LiteralPath $manifest)) {
-    throw "Numadora home does not contain Cargo.toml: $NumadoraHome"
+    Start-Process -FilePath "dotnet" -ArgumentList $arguments -WorkingDirectory $root -WindowStyle Hidden
+
+    $deadline = (Get-Date).AddSeconds(20)
+    do {
+        Start-Sleep -Milliseconds 500
+        try {
+            Invoke-RestMethod -Uri $health -TimeoutSec 2 | Out-Null
+            return
+        } catch {
+        }
+    } while ((Get-Date) -lt $deadline)
+
+    throw "Slasher did not become ready at $health"
 }
 
 $resolvedPath = Resolve-Path -LiteralPath $Path
-$scriptRoot = Split-Path -Parent $PSScriptRoot
-if ([string]::IsNullOrWhiteSpace($TargetDir)) {
-    $TargetDir = Join-Path (Join-Path $scriptRoot ".numadora-targets") "default"
-}
-elseif (-not [System.IO.Path]::IsPathRooted($TargetDir)) {
-    $TargetDir = Join-Path (Get-Location) $TargetDir
-}
-Push-Location $NumadoraHome
-$previousCargoTargetDir = $env:CARGO_TARGET_DIR
+$root = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")
+$relativePath = [IO.Path]::GetRelativePath($root, $resolvedPath)
+
+Ensure-SlasherServer
+
+$body = @{
+    path = $relativePath
+    language = "numadora"
+} | ConvertTo-Json -Depth 8
+
 try {
-    New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
-    $env:CARGO_TARGET_DIR = $TargetDir
-    cargo run -- check $resolvedPath
-    if ($LASTEXITCODE -ne 0) {
-        exit $LASTEXITCODE
+    $response = Invoke-RestMethod `
+        -Uri "http://127.0.0.1:$Port/scripts/check" `
+        -Method Post `
+        -ContentType "application/json" `
+        -Body $body
+    Write-Host "Numadora check passed: $relativePath"
+    $response.requiredCapabilities | ConvertTo-Json -Depth 8
+} catch {
+    if ($_.ErrorDetails.Message) {
+        Write-Host $_.ErrorDetails.Message
     }
-}
-finally {
-    $env:CARGO_TARGET_DIR = $previousCargoTargetDir
-    Pop-Location
+
+    exit 1
 }

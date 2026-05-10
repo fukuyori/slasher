@@ -75,18 +75,8 @@ public sealed partial class ScriptRunService
         var (sourcePath, deleteSource) = await ResolveNumadoraCheckSourceAsync(checkRequest, cancellationToken);
         try
         {
-            var numadoraHome = ResolveNumadoraHome();
-            if (numadoraHome is null)
-            {
-                return new NumadoraHostCallTrace(
-                    [],
-                    null,
-                    null,
-                    "Numadora home was not found. Set NUMADORA_HOME or place Numadora at D:\\home\\source\\rust\\Numadora.",
-                    null);
-            }
-
-            var result = await RunNumadoraProcessAsync(numadoraHome, "run", sourcePath, "host-call-trace", cancellationToken);
+            var sourceText = await File.ReadAllTextAsync(sourcePath, cancellationToken);
+            var result = ExecuteNumadoraSource(sourcePath, sourceText);
             var raw = CombineProcessOutput(result.Stdout, result.Stderr);
             var diagnostic = result.ExitCode == 0 ? null : ToNumadoraDiagnostic(sourcePath, result);
             return new NumadoraHostCallTrace(
@@ -123,17 +113,8 @@ public sealed partial class ScriptRunService
         var (sourcePath, deleteSource) = await ResolveNumadoraCheckSourceAsync(checkRequest, cancellationToken);
         try
         {
-            var numadoraHome = ResolveNumadoraHome();
-            if (numadoraHome is null)
-            {
-                throw new ScriptCommandException(
-                    "numadora_not_found",
-                    "Numadora home was not found. Set NUMADORA_HOME or place Numadora at D:\\home\\source\\rust\\Numadora.",
-                    NumadoraRunDetails(check),
-                    Recoverable: false);
-            }
-
-            var result = await RunNumadoraProcessAsync(numadoraHome, "run", sourcePath, "run", cancellationToken);
+            var sourceText = await File.ReadAllTextAsync(sourcePath, cancellationToken);
+            var result = ExecuteNumadoraSource(sourcePath, sourceText);
             await AppendNumadoraProcessEventAsync(
                 state,
                 sourcePath,
@@ -254,16 +235,17 @@ public sealed partial class ScriptRunService
         string normalizedPurpose,
         CancellationToken cancellationToken)
     {
+        var references = new NumadoraHostReferenceState();
         foreach (var hostCall in hostCalls)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var sequence = state.NextSequence++;
             var startedAt = DateTimeOffset.UtcNow;
             var formatted = FormatNumadoraHostCall(hostCall);
-            var policyTarget = GetNumadoraPolicyTarget(hostCall);
+            var policyTarget = GetNumadoraPolicyTarget(hostCall, references);
             var policyInput = BuildNumadoraPolicyInput(state.Report, hostCall, check, normalizedPurpose, policyTarget);
             var policyDecision = _numadoraPolicy.Evaluate(policyInput);
-            var execution = await ExecuteNumadoraLocalHostCallAsync(hostCall, policyInput, policyDecision, cancellationToken);
+            var execution = await ExecuteNumadoraLocalHostCallAsync(hostCall, policyInput, policyDecision, references, cancellationToken);
             var endedAt = DateTimeOffset.UtcNow;
             var evidence = new List<AutomationEvidence>();
             if (execution.Screenshot is not null)
@@ -380,7 +362,11 @@ public sealed partial class ScriptRunService
             ["allowedLocalHostCalls"] = new[]
             {
                 "slasher_app.Start",
+                "slasher_app.Close",
                 "slasher_window.Focus",
+                "slasher_window.WaitForApp",
+                "slasher_window.State",
+                "slasher_window.Close",
                 "slasher_input.Text",
                 "slasher_input.Keys",
                 "slasher_input.Mouse",
@@ -388,6 +374,8 @@ public sealed partial class ScriptRunService
                 "slasher_input.Drag",
                 "slasher_input.ContextMenu",
                 "slasher_screen.Capture",
+                "slasher_screen.CaptureWindow",
+                "slasher_screen.CaptureMonitor",
                 "slasher_element.Find",
                 "slasher_element.Exists",
                 "slasher_element.ReadText",
@@ -428,9 +416,13 @@ public sealed partial class ScriptRunService
     {
         return item.Module.Equals("slasher_io", StringComparison.OrdinalIgnoreCase)
             || (item.Module.Equals("slasher_app", StringComparison.OrdinalIgnoreCase)
-                && item.Function.Equals("Start", StringComparison.OrdinalIgnoreCase))
+                && (item.Function.Equals("Start", StringComparison.OrdinalIgnoreCase)
+                    || item.Function.Equals("Close", StringComparison.OrdinalIgnoreCase)))
             || (item.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
-                && item.Function.Equals("Focus", StringComparison.OrdinalIgnoreCase))
+                && (item.Function.Equals("Focus", StringComparison.OrdinalIgnoreCase)
+                    || item.Function.Equals("WaitForApp", StringComparison.OrdinalIgnoreCase)
+                    || item.Function.Equals("State", StringComparison.OrdinalIgnoreCase)
+                    || item.Function.Equals("Close", StringComparison.OrdinalIgnoreCase)))
             || (item.Module.Equals("slasher_input", StringComparison.OrdinalIgnoreCase)
                 && (item.Function.Equals("Text", StringComparison.OrdinalIgnoreCase)
                     || item.Function.Equals("Keys", StringComparison.OrdinalIgnoreCase)
@@ -543,8 +535,12 @@ public sealed partial class ScriptRunService
         var mapped = name switch
         {
             "app.Start" => ("slasher_app", "Start"),
+            "app.Close" => ("slasher_app", "Close"),
             "window.WaitForTitle" => ("slasher_window", "WaitForTitle"),
+            "window.WaitForApp" => ("slasher_window", "WaitForApp"),
             "window.Focus" => ("slasher_window", "Focus"),
+            "window.State" => ("slasher_window", "State"),
+            "window.Close" => ("slasher_window", "Close"),
             "input.Text" => ("slasher_input", "Text"),
             "input.Keys" => ("slasher_input", "Keys"),
             "input.Mouse" => ("slasher_input", "Mouse"),
@@ -552,6 +548,8 @@ public sealed partial class ScriptRunService
             "input.Drag" => ("slasher_input", "Drag"),
             "input.ContextMenu" => ("slasher_input", "ContextMenu"),
             "screen.Capture" => ("slasher_screen", "Capture"),
+            "screen.CaptureWindow" => ("slasher_screen", "CaptureWindow"),
+            "screen.CaptureMonitor" => ("slasher_screen", "CaptureMonitor"),
             "element.Find" => ("slasher_element", "Find"),
             "element.Exists" => ("slasher_element", "Exists"),
             "element.ReadText" => ("slasher_element", "ReadText"),

@@ -57,15 +57,60 @@ public sealed partial class ScriptRunService
             NumadoraApprovalsFromReport(report));
     }
 
-    private AutomationTarget? GetNumadoraPolicyTarget(NumadoraHostCall hostCall)
+    private AutomationTarget? GetNumadoraPolicyTarget(
+        NumadoraHostCall hostCall,
+        NumadoraHostReferenceState? references = null)
     {
         if (hostCall.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
             && hostCall.Function.Equals("Focus", StringComparison.OrdinalIgnoreCase))
         {
             var handle = string.Join(' ', hostCall.Arguments).Trim();
+            if (!string.IsNullOrWhiteSpace(handle) && references is not null)
+            {
+                var referencedTarget = references.ResolveWindowTarget(handle);
+                if (referencedTarget is not null)
+                {
+                    return referencedTarget;
+                }
+            }
+
             return string.IsNullOrWhiteSpace(handle)
                 ? null
                 : new AutomationTarget("window", Handle: handle);
+        }
+
+        if (hostCall.Module.Equals("slasher_app", StringComparison.OrdinalIgnoreCase)
+            && hostCall.Function.Equals("Close", StringComparison.OrdinalIgnoreCase))
+        {
+            var token = SplitNumadoraArgs(hostCall.Arguments).FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(token)
+                && references is not null
+                && references.TryGetApp(token, out var appRef))
+            {
+                return new AutomationTarget(
+                    "process",
+                    appRef.MainWindowHandle,
+                    appRef.MainWindowTitle,
+                    ProcessId: appRef.ProcessId,
+                    ProcessName: appRef.ProcessName);
+            }
+        }
+
+        if ((hostCall.Module.Equals("slasher_window", StringComparison.OrdinalIgnoreCase)
+                && (hostCall.Function.Equals("State", StringComparison.OrdinalIgnoreCase)
+                    || hostCall.Function.Equals("Close", StringComparison.OrdinalIgnoreCase)))
+            || (hostCall.Module.Equals("slasher_screen", StringComparison.OrdinalIgnoreCase)
+                && hostCall.Function.Equals("CaptureWindow", StringComparison.OrdinalIgnoreCase)))
+        {
+            var token = SplitNumadoraArgs(hostCall.Arguments).FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(token) && references is not null)
+            {
+                var referencedTarget = references.ResolveWindowTarget(token);
+                if (referencedTarget is not null)
+                {
+                    return referencedTarget;
+                }
+            }
         }
 
         return _automation.TryGetForegroundWindow(out var foreground) && foreground is not null

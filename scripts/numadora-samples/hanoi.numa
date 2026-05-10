@@ -1,26 +1,33 @@
-IMPORT slasher_dialog AS dialog
+# Slasher v0.2 sample: pure recursion + std/array + dialog display.
+#
+# Demonstrates:
+# - pure recursive function with type parameters (implicit, no [T] needed)
+# - std/array.concat for functional list building (avoid EFFECT push in pure code)
+# - std/array.join for string concatenation
+# - INTERACTIVE dialog at the end
+#
+# Requires Numadora v0.2 parser. Run prerequisite: allowInteractiveInput = true.
 
-FUNC Moves(n: Int, from: String, to: String, work: String) -> Array<String>
-    VAR lines: Array<String> := []
+MODULE hanoi
+REQUIRES (user-input)
 
-    IF n <= 0 THEN
-        RETURN lines
-    END
+IMPORT std/array AS array
+IMPORT slasher/dialog AS dialog
 
-    FOR line IN Moves(n - 1, from, work, to) DO
-        lines := Push(lines, line)
-    END
+# Pure: returns the move sequence to transfer n disks from `from` to `to` using `work`.
+FUNC moves(n: int, from: string, to: string, work: string): array[string]
+  IF n <= 0 THEN
+    RETURN []
+  END
 
-    lines := Push(lines, from + " -> " + to)
-
-    FOR line IN Moves(n - 1, work, to, from) DO
-        lines := Push(lines, line)
-    END
-
-    RETURN lines
+  LET head = moves(n - 1, from, work, to)
+  LET mid: array[string] = [from + " -> " + to]
+  LET tail = moves(n - 1, work, to, from)
+  RETURN array.concat(array.concat(head, mid), tail)
 END
 
-FUNC main()
-    LET result := Join(Moves(3, "A", "C", "B"), "\\n")
-    dialog.Message(result, "Hanoi")
+EXPORT FUNC main()
+  LET steps = moves(3, "A", "C", "B")
+  LET result = array.join(steps, "\n")
+  dialog.message("Hanoi", result, "info")
 END

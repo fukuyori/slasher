@@ -11,6 +11,18 @@ internal readonly struct NativeRect
     public readonly int Bottom;
 }
 
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+internal struct MonitorInfo
+{
+    public int Size;
+    public NativeRect Monitor;
+    public NativeRect WorkArea;
+    public uint Flags;
+
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+    public string DeviceName;
+}
+
 [StructLayout(LayoutKind.Sequential)]
 internal struct BitmapInfo
 {

@@ -1,0 +1,59 @@
+# Slasher data file operations: CSV, JSON, Excel.
+# Provided by Io layer hosting.
+
+MODULE slasher/data
+
+# --- CSV ---
+
+--- CSV 1 行を表すレコード (フィールド順序保持)。
+EXPORT RECORD CsvRow {
+  --- ヘッダがある場合の column 名 → 値マップ (array of pairs として表現)。
+  fields: array[record { name: string, value: string }],
+}
+
+--- CSV 読み込み結果。
+EXPORT RECORD CsvDocument {
+  --- ヘッダ行 (has-header=false なら空)。
+  headers: array[string],
+  --- データ行。
+  rows: array[CsvRow],
+}
+
+--- CSV ファイルを読み込む。delimiter は通常 ","。
+EXPORT EFFECT(file-read) FUNC csv-read(path: string, has-header: bool, delimiter: string): CsvDocument
+
+--- CSV を JSON 文字列に変換。
+EXPORT EFFECT(file-read) FUNC csv-to-json(path: string, has-header: bool, delimiter: string): string
+
+--- CSV を書き出す。
+EXPORT EFFECT(file-write, destructive) FUNC csv-write(path: string, headers: array[string], rows: array[CsvRow], allow-destructive: bool): unit
+
+# --- JSON ---
+
+--- JSON ファイルから値を取得 (JSON Pointer)。
+--- 例: pointer = "/users/0/name"
+EXPORT EFFECT(file-read) FUNC json-query(path: string, pointer: string): Option[string]
+
+--- JSON ファイルを文字列として読む。
+EXPORT EFFECT(file-read) FUNC json-read(path: string): string
+
+--- JSON 文字列を整形してファイルに書く。
+EXPORT EFFECT(file-write, destructive) FUNC json-write(path: string, content: string, allow-destructive: bool): unit
+
+# --- Excel (.xlsx) ---
+
+--- ワークブックの観測情報。
+EXPORT RECORD WorkbookInfo {
+  path: string,
+  sheets: array[string],
+  modified-ms: int,
+}
+
+--- ワークシートの読み込み結果 (CsvDocument と同形式)。
+EXPORT EFFECT(file-read) FUNC excel-read(path: string, sheet-name: string, has-header: bool): CsvDocument
+
+--- ワークブックの基本情報を取得 (シート一覧など)。
+EXPORT EFFECT(file-read) FUNC excel-workbook(path: string): WorkbookInfo
+
+--- 第 1 シートを読む (excel-read の糖衣)。
+EXPORT EFFECT(file-read) FUNC excel-read-first-sheet(path: string, has-header: bool): CsvDocument
